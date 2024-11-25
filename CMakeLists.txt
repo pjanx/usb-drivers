@@ -1,5 +1,6 @@
 cmake_minimum_required (VERSION 3.10)
-project (usb-drivers VERSION 0.1.0 DESCRIPTION "USB drivers" LANGUAGES C)
+project (usb-drivers VERSION 0.1.0
+	DESCRIPTION "User space USB drivers" LANGUAGES C)
 
 # Moar warnings
 set (CMAKE_C_STANDARD 99)
@@ -27,6 +28,9 @@ if (WIN32 AND CMAKE_CROSSCOMPILING)
 	set (ENV{PKG_CONFIG_PATH} "${win32_deps_pcpath}")
 	set (ENV{PKG_CONFIG_LIBDIR} "${win32_deps_pcpath}")
 endif ()
+if (WIN32)
+	add_link_options (-static)
+endif ()
 
 # Dependencies
 set (CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/liberty/cmake)
@@ -35,8 +39,8 @@ find_package (PkgConfig REQUIRED)
 pkg_check_modules (libusb libusb-1.0)
 pkg_search_module (hidapi hidapi hidapi-hidraw)
 
-option (WITH_LIBUSB "Compile with libusb utilities" ${libusb_FOUND})
-option (WITH_HIDRAW "Compile with hidraw utilities" ${hidapi_FOUND})
+option (WITH_LIBUSB "Compile with libusb-based utilities" ${libusb_FOUND})
+option (WITH_HIDAPI "Compile with hidapi-based utilities" ${hidapi_FOUND})
 
 # Generate a configuration file
 configure_file (${PROJECT_SOURCE_DIR}/config.h.in
@@ -67,14 +71,14 @@ if (WITH_LIBUSB)
 	target_link_libraries (razer-bw-te-ctl ${libusb_LIBRARIES})
 endif ()
 
-if (WITH_HIDRAW)
+if (WITH_HIDAPI)
 	list (APPEND targets eizoctl)
 	add_executable (eizoctl eizoctl.c)
 	target_include_directories (eizoctl PUBLIC ${hidapi_INCLUDE_DIRS})
 	target_link_directories (eizoctl PUBLIC ${hidapi_LIBRARY_DIRS})
 	target_link_libraries (eizoctl ${hidapi_LIBRARIES})
 endif ()
-if (WITH_HIDRAW AND WIN32)
+if (WITH_HIDAPI AND WIN32)
 	list (APPEND targets_gui eizoctltray)
 
 	include (IconUtils)
@@ -95,7 +99,7 @@ if (WITH_HIDRAW AND WIN32)
 
 	add_executable (eizoctltray WIN32 eizoctl.c eizoctltray.rc)
 	target_compile_definitions (eizoctltray PUBLIC -DUNICODE -D_UNICODE -DTRAY)
-	target_link_options (eizoctltray PUBLIC -static -municode)
+	target_link_options (eizoctltray PUBLIC -municode)
 	target_include_directories (eizoctltray PUBLIC ${hidapi_INCLUDE_DIRS})
 	target_link_directories (eizoctltray PUBLIC ${hidapi_LIBRARY_DIRS})
 	target_link_libraries (eizoctltray ${hidapi_LIBRARIES} powrprof)

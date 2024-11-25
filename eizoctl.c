@@ -433,8 +433,8 @@ eizo_monitor_read_secondary_descriptor(struct eizo_monitor *m)
 				"secondary descriptor Get_Feature failed: %ls",
 				hid_error(m->dev));
 		if (peek_u16le(&buf[1]) != offset)
-			return eizo_monitor_failf(
-				m, "secondary descriptor starts at an unexpected offset");
+			return eizo_monitor_failf(m,
+				"secondary descriptor starts at an unexpected offset");
 
 		// We could also limit the amount we copy, but whatever.
 		if (offset + lenr - HEADER_LEN > sizeof descriptor)
@@ -444,7 +444,7 @@ eizo_monitor_read_secondary_descriptor(struct eizo_monitor *m)
 		offset += lenr - HEADER_LEN;
 	}
 
-#if DEBUG
+#if DUMP_DESCRIPTORS
 	for (size_t i = 0; i < descriptor_len; i++)
 		printf("%02x ", descriptor[i]);
 	printf("\n");
@@ -491,18 +491,14 @@ eizo_monitor_open(struct eizo_monitor *m, const struct hid_device_info *info)
 	m->vid = info->vendor_id;
 	m->pid = info->product_id;
 	if (info->usage_page != USB_USAGE_PAGE__MONITOR ||
-		info->usage != USB_USAGE_PAGE_MONITOR_ID__MONITOR_CONTROL) {
-		eizo_monitor_failf(m, "unexpected HID usage");
-		return false;
-	}
+		info->usage != USB_USAGE_PAGE_MONITOR_ID__MONITOR_CONTROL)
+		return eizo_monitor_failf(m, "unexpected HID usage");
 
 	// There can be more displays with the same VID/PID,
 	// and info does not contain the serial number to tell them apart.
 	hid_device *dev = hid_open_path(info->path);
-	if (!dev) {
-		eizo_monitor_failf(m, "failed to open: %ls", hid_error(NULL));
-		return false;
-	}
+	if (!dev)
+		return eizo_monitor_failf(m, "%ls", hid_error(NULL));
 
 	uint8_t descriptor[HID_API_MAX_REPORT_DESCRIPTOR_SIZE] = {};
 	int len = hid_get_report_descriptor(dev, descriptor, sizeof descriptor);
@@ -524,6 +520,12 @@ eizo_monitor_open(struct eizo_monitor *m, const struct hid_device_info *info)
 		eizo_monitor_failf(m, "EIZO HID report %u not supported", id);
 		goto out;
 	}
+
+#if DUMP_DESCRIPTORS
+	for (size_t i = 0; i < (size_t) len; i++)
+		printf("%02x ", descriptor[i]);
+	printf("\n");
+#endif
 
 	uint8_t pinbuf[3] = {EIZO_REPORT_ID_PIN_CODE, 0, 0};
 	if (hid_get_feature_report(dev, pinbuf, sizeof pinbuf) != sizeof pinbuf) {
@@ -914,16 +916,15 @@ eizo_restart(struct eizo_monitor *m)
 
 // --- Main --------------------------------------------------------------------
 
-static void
+static bool
 eizo_watch(struct eizo_monitor *m)
 {
-	uint8_t buf[1024];
+	uint8_t buf[1024] = {};
 	int res = 0;
 	while (true) {
-		if ((res = hid_read(m->dev, buf, sizeof buf)) < 0) {
-			eizo_monitor_failf(m, "watch: %ls\n", hid_error(m->dev));
-			return;
-		}
+		if ((res = hid_read(m->dev, buf, sizeof buf)) < 0)
+			return eizo_monitor_failf(m, "watch: %ls", hid_error(m->dev));
+
 		if (buf[0] != EIZO_REPORT_ID_GET &&
 			buf[0] != EIZO_REPORT_ID_GET_LONG) {
 			printf("Unknown report ID\n");
@@ -1025,8 +1026,10 @@ run(int argc, char *argv[], print_fn output, print_fn error, bool verbose)
 	struct hid_device_info *devs = hid_enumerate(USB_VID_EIZO, 0), *p = devs;
 	for (; p; p = p->next) {
 		struct eizo_monitor m = {};
-		if (!eizo_monitor_open(&m, p))
+		if (!eizo_monitor_open(&m, p)) {
+			error("%s\n", m.error);
 			continue;
+		}
 
 		if (isfinite(brightness)) {
 			double prev = 0.;
@@ -1066,10 +1069,10 @@ run(int argc, char *argv[], print_fn output, print_fn error, bool verbose)
 				output("%s %s: restart\n", m.product, m.serial);
 		}
 		if (events) {
-			if (verbose)
-				eizo_watch(&m);
-			else
+			if (!verbose)
 				error("Watching events is not possible in this mode\n");
+			else if (!eizo_watch(&m))
+				error("%s\n", m.error);
 		}
 
 		eizo_monitor_close(&m);
@@ -1308,9 +1311,8 @@ show_menu(void)
 		id = id % 0x1000;
 		double brightness = 0.;
 		if (id >= IDM_INPUT_0) {
-			// FIXME: This seems to be too fast.
 			if (process_any_power_request())
-				eizo_set_input_port(m, id);
+				eizo_set_input_port(m, id - IDM_INPUT_0);
 		} else if (id == IDM_BRIGHTER) {
 			if (eizo_get_brightness(m, &brightness))
 				eizo_set_brightness(m, min(1., brightness + .1));

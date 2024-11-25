@@ -37,8 +37,8 @@ Runtime dependencies:
  libusb-1.0 (elksmart-comm, razer-bw-te-ctl), hidapi (eizoctl)
 
  $ git clone --recursive https://git.janouch.name/p/usb-drivers.git
- $ mkdir desktop-tools/build
- $ cd desktop-tools/build
+ $ mkdir usb-drivers/build
+ $ cd usb-drivers/build
  $ cmake .. -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=Debug
  $ make
 
@@ -53,7 +53,7 @@ Or you can try telling CMake to make a package for you.  For Debian it is:
 
 Contributing and Support
 ------------------------
-Use https://git.janouch.name/p/desktop-tools to report bugs, request features,
+Use https://git.janouch.name/p/usb-drivers to report bugs, request features,
 or submit pull requests.  `git send-email` is tolerated.  If you want to discuss
 the project, feel free to join me at ircs://irc.janouch.name, channel #dev.
 
