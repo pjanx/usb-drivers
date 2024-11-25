@@ -1,0 +1,53 @@
+USB drivers
+===========
+:compact-option:
+
+_usb-drivers_ is a collection of utilities to control various hardware over USB:
+
+ - _eizoctl_ controls elementary settings of EIZO computer monitors.
++
+It is intended as a replacement for official EIZO software,
+and may not run at the same time, as it would contend for device access.
+
+ - _eizoctltray_ is a derived Windows utility that can stay in the systray.
+
+ - _elksmart-comm_ interfaces with ELK Smart infrared dongles,
+   partially reimplementing the Ocrustar mobile app.
+   While it does not build for Windows, this is incidental.
+
+Packages
+--------
+Regular releases are sporadic.  git master should be stable enough.
+
+Building
+--------
+Build dependencies: CMake, pkg-config, liberty (included) +
+Runtime dependencies: libusb-1.0 (elksmart-comm), hidapi (eizoctl)
+
+ $ git clone --recursive https://git.janouch.name/p/usb-drivers.git
+ $ mkdir desktop-tools/build
+ $ cd desktop-tools/build
+ $ cmake .. -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=Debug
+ $ make
+
+To install the applications, you can do either the usual:
+
+ # make install
+
+Or you can try telling CMake to make a package for you.  For Debian it is:
+
+ $ cpack -G DEB
+ # dpkg -i usb-drivers-*.deb
+
+Contributing and Support
+------------------------
+Use https://git.janouch.name/p/desktop-tools to report bugs, request features,
+or submit pull requests.  `git send-email` is tolerated.  If you want to discuss
+the project, feel free to join me at ircs://irc.janouch.name, channel #dev.
+
+Bitcoin donations are accepted at: 12r5uEWEgcHC46xd64tt3hHt9EUvYYDHe9
+
+License
+-------
+This software is released under the terms of the 0BSD license, the text of which
+is included within the package along with the list of authors.

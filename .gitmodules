@@ -1,0 +1,3 @@
+[submodule "liberty"]
+	path = liberty
+	url = https://git.janouch.name/p/liberty
