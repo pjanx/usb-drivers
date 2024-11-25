@@ -11,6 +11,23 @@ if ("${CMAKE_C_COMPILER_ID}" MATCHES "GNU" OR CMAKE_COMPILER_IS_GNUCC)
 	set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -Wno-unused-function")
 endif ()
 
+if (WIN32 AND CMAKE_CROSSCOMPILING)
+	set (win32_deps_root "${PROJECT_SOURCE_DIR}")
+	set (win32_deps_prefix "${win32_deps_root}/mingw64")
+	list (APPEND CMAKE_PREFIX_PATH "${win32_deps_prefix}")
+	list (APPEND CMAKE_INCLUDE_PATH "${win32_deps_prefix}/lib")
+	set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mms-bitfields")
+
+	list (APPEND CMAKE_FIND_ROOT_PATH ${win32_deps_prefix})
+
+	# Relativize prefixes, and bar pkg-config from looking up host libraries
+	set (ENV{PKG_CONFIG_SYSROOT_DIR} "${win32_deps_root}")
+	set (win32_deps_pcpath
+		"${win32_deps_prefix}/share/pkgconfig:${win32_deps_prefix}/lib/pkgconfig")
+	set (ENV{PKG_CONFIG_PATH} "${win32_deps_pcpath}")
+	set (ENV{PKG_CONFIG_LIBDIR} "${win32_deps_pcpath}")
+endif ()
+
 # Dependencies
 set (CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/liberty/cmake)
 
@@ -35,13 +52,14 @@ elseif (APPLE)
 	add_definitions (-D_DARWIN_C_SOURCE)
 endif ()
 
-if (WITH_LIBUSB)
+if (WITH_LIBUSB AND NOT WIN32)
 	list (APPEND targets elksmart-comm)
 	add_executable (elksmart-comm elksmart-comm.c)
 	target_include_directories (elksmart-comm PUBLIC ${libusb_INCLUDE_DIRS})
 	target_link_directories (elksmart-comm PUBLIC ${libusb_LIBRARY_DIRS})
 	target_link_libraries (elksmart-comm ${libusb_LIBRARIES})
-
+endif ()
+if (WITH_LIBUSB)
 	list (APPEND targets razer-bw-te-ctl)
 	add_executable (razer-bw-te-ctl razer-bw-te-ctl.c)
 	target_include_directories (razer-bw-te-ctl PUBLIC ${libusb_INCLUDE_DIRS})
@@ -80,26 +98,28 @@ if (WITH_HIDRAW AND WIN32)
 	target_link_options (eizoctltray PUBLIC -static -municode)
 	target_include_directories (eizoctltray PUBLIC ${hidapi_INCLUDE_DIRS})
 	target_link_directories (eizoctltray PUBLIC ${hidapi_LIBRARY_DIRS})
-	target_link_libraries (eizoctltray ${hidapi_LIBRARIES} PowrProf)
+	target_link_libraries (eizoctltray ${hidapi_LIBRARIES} powrprof)
 endif ()
 
 # Generate documentation from help output
-find_program (HELP2MAN_EXECUTABLE help2man)
-if (NOT HELP2MAN_EXECUTABLE)
-	message (FATAL_ERROR "help2man not found")
+if (NOT CMAKE_CROSSCOMPILING)
+	find_program (HELP2MAN_EXECUTABLE help2man)
+	if (NOT HELP2MAN_EXECUTABLE)
+		message (FATAL_ERROR "help2man not found")
+	endif ()
+
+	foreach (target ${targets})
+		set (page_output "${PROJECT_BINARY_DIR}/${target}.1")
+		list (APPEND project_MAN_PAGES "${page_output}")
+		add_custom_command (OUTPUT ${page_output}
+			COMMAND ${HELP2MAN_EXECUTABLE} -N
+				"${PROJECT_BINARY_DIR}/${target}" -o ${page_output}
+			DEPENDS ${target}
+			COMMENT "Generating man page for ${target}" VERBATIM)
+	endforeach ()
+
+	add_custom_target (docs ALL DEPENDS ${project_MAN_PAGES})
 endif ()
-
-foreach (target ${targets})
-	set (page_output "${PROJECT_BINARY_DIR}/${target}.1")
-	list (APPEND project_MAN_PAGES "${page_output}")
-	add_custom_command (OUTPUT ${page_output}
-		COMMAND ${HELP2MAN_EXECUTABLE} -N
-			"${PROJECT_BINARY_DIR}/${target}" -o ${page_output}
-		DEPENDS ${target}
-		COMMENT "Generating man page for ${target}" VERBATIM)
-endforeach ()
-
-add_custom_target (docs ALL DEPENDS ${project_MAN_PAGES})
 
 # The files to be installed
 include (GNUInstallDirs)

@@ -309,7 +309,7 @@ apply_options(libusb_device_handle *device,
 	return 0;
 }
 
-#define ERROR(label, ...)                        \
+#define FAIL(label, ...)                         \
 	do {                                         \
 		fprintf(stderr, "Error: " __VA_ARGS__);  \
 		status = 1;                              \
@@ -326,7 +326,7 @@ main(int argc, char *argv[])
 
 	int result, status = 0;
 	if ((result = libusb_init(NULL)))
-		ERROR(error_0, "libusb initialisation failed: %s\n",
+		FAIL(error_0, "libusb initialisation failed: %s\n",
 			libusb_error_name(result));
 
 	result = 0;
@@ -334,10 +334,10 @@ main(int argc, char *argv[])
 		find_device(USB_VENDOR_RAZER, USB_PRODUCT_RAZER_BW_TE, &result);
 	if (!device) {
 		if (result)
-			ERROR(error_1, "couldn't open device: %s\n",
+			FAIL(error_1, "couldn't open device: %s\n",
 				libusb_error_name(result));
 		else
-			ERROR(error_1, "no suitable device found\n");
+			FAIL(error_1, "no suitable device found\n");
 	}
 
 	bool reattach_driver = false;
@@ -348,29 +348,29 @@ main(int argc, char *argv[])
 	case 1:
 		reattach_driver = true;
 		if ((result = libusb_detach_kernel_driver(device, BW_CTL_IFACE)))
-			ERROR(error_2, "couldn't detach kernel driver: %s\n",
+			FAIL(error_2, "couldn't detach kernel driver: %s\n",
 				libusb_error_name(result));
 		break;
 	default:
-		ERROR(error_2, "coudn't detect kernel driver presence: %s\n",
+		FAIL(error_2, "coudn't detect kernel driver presence: %s\n",
 			libusb_error_name(result));
 	}
 
 	if ((result = libusb_claim_interface(device, BW_CTL_IFACE)))
-		ERROR(error_3, "couldn't claim interface: %s\n",
+		FAIL(error_3, "couldn't claim interface: %s\n",
 			libusb_error_name(result));
 
 	if ((result = apply_options(device, &options, &new_config)))
-		ERROR(error_4, "operation failed: %s\n",
+		FAIL(error_4, "operation failed: %s\n",
 			libusb_error_name (result));
 error_4:
 	if ((result = libusb_release_interface(device, BW_CTL_IFACE)))
-		ERROR(error_3, "couldn't release interface: %s\n",
+		FAIL(error_3, "couldn't release interface: %s\n",
 			libusb_error_name(result));
 error_3:
 	if (reattach_driver) {
 		if ((result = libusb_attach_kernel_driver(device, BW_CTL_IFACE)))
-			ERROR(error_2, "couldn't reattach kernel driver: %s\n",
+			FAIL(error_2, "couldn't reattach kernel driver: %s\n",
 				libusb_error_name(result));
 	}
 
