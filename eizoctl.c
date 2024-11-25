@@ -33,7 +33,9 @@
 #include <getopt.h>
 #include <hidapi.h>
 
-#define PROJECT_NAME "eizoctl"
+#include "config.h"
+#undef PROGRAM_NAME
+#define PROGRAM_NAME "eizoctl"
 
 #if defined __GNUC__
 #define ATTRIBUTE_PRINTF(x, y) __attribute__((format(printf, x, y)))
@@ -966,6 +968,7 @@ run(int argc, char *argv[], print_fn output, print_fn error, bool verbose)
 		{"restart", no_argument, NULL, 'r'},
 		{"events", no_argument, NULL, 'e'},
 		{"help", no_argument, NULL, 'h'},
+		{"version", no_argument, NULL, 'V'},
 		{}
 	};
 
@@ -993,6 +996,9 @@ run(int argc, char *argv[], print_fn output, print_fn error, bool verbose)
 			break;
 		case 'h':
 			output(usage, name);
+			return 0;
+		case 'V':
+			output(PROGRAM_NAME " " PROGRAM_VERSION "\n");
 			return 0;
 		default:
 			error("Unknown option\n");
@@ -1397,14 +1403,14 @@ wWinMain(
 		.hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(1)),
 		.hCursor = LoadCursor(NULL, IDC_ARROW),
 		.hbrBackground = GetSysColorBrush(COLOR_3DFACE),
-		.lpszClassName = TEXT(PROJECT_NAME),
+		.lpszClassName = TEXT(PROGRAM_NAME),
 	};
 	if (!RegisterClassEx(&wc))
 		return 1;
 
 	// We need a window, but it can stay hidden.
 	g.hwnd = CreateWindowEx(WS_EX_CONTROLPARENT,
-		wc.lpszClassName, TEXT(PROJECT_NAME), WS_OVERLAPPEDWINDOW,
+		wc.lpszClassName, TEXT(PROGRAM_NAME), WS_OVERLAPPEDWINDOW,
 		CW_USEDEFAULT, CW_USEDEFAULT, 600, 400, NULL, NULL, hInstance, NULL);
 	NOTIFYICONDATA nid = {
 		.cbSize = sizeof nid,
@@ -1414,7 +1420,7 @@ wWinMain(
 		.uCallbackMessage = WM_APP + 0,
 		// TODO(p): LoadIconMetric is suggested for high-DPI displays.
 		.hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(1)),
-		.szTip = TEXT(PROJECT_NAME),
+		.szTip = TEXT(PROGRAM_NAME),
 	};
 	if (!Shell_NotifyIcon(NIM_ADD, &nid)) {
 		message_error("Failed to add notification area icon.");

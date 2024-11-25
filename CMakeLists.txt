@@ -13,12 +13,13 @@ endif ()
 
 # Dependencies
 set (CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/liberty/cmake)
-include (AddThreads)
 
 find_package (PkgConfig REQUIRED)
 pkg_check_modules (libusb libusb-1.0)
+pkg_search_module (hidapi hidapi hidapi-hidraw)
 
 option (WITH_LIBUSB "Compile with libusb utilities" ${libusb_FOUND})
+option (WITH_HIDRAW "Compile with hidraw utilities" ${hidapi_FOUND})
 
 # Generate a configuration file
 configure_file (${PROJECT_SOURCE_DIR}/config.h.in
@@ -46,6 +47,40 @@ if (WITH_LIBUSB)
 	target_include_directories (razer-bw-te-ctl PUBLIC ${libusb_INCLUDE_DIRS})
 	target_link_directories (razer-bw-te-ctl PUBLIC ${libusb_LIBRARY_DIRS})
 	target_link_libraries (razer-bw-te-ctl ${libusb_LIBRARIES})
+endif ()
+
+if (WITH_HIDRAW)
+	list (APPEND targets eizoctl)
+	add_executable (eizoctl eizoctl.c)
+	target_include_directories (eizoctl PUBLIC ${hidapi_INCLUDE_DIRS})
+	target_link_directories (eizoctl PUBLIC ${hidapi_LIBRARY_DIRS})
+	target_link_libraries (eizoctl ${hidapi_LIBRARIES})
+endif ()
+if (WITH_HIDRAW AND WIN32)
+	list (APPEND targets_gui eizoctltray)
+
+	include (IconUtils)
+	set (icon_png_list)
+	foreach (icon_size 16 32 48)
+		icon_to_png (eizoctltray ${PROJECT_SOURCE_DIR}/eizoctltray.svg
+			${icon_size} ${PROJECT_BINARY_DIR}/icons icon_png)
+		list (APPEND icon_png_list ${icon_png})
+	endforeach ()
+	icon_to_png (eizoctltray ${PROJECT_SOURCE_DIR}/eizoctltray.svg
+		256 ${PROJECT_BINARY_DIR}/icons icon_png)
+
+	set (icon_ico ${PROJECT_BINARY_DIR}/eizoctltray.ico)
+	icon_for_win32 (${icon_ico} "${icon_png_list}" "${icon_png}")
+	list (APPEND icon_ico_list )
+	set_property (SOURCE eizoctltray.rc
+		APPEND PROPERTY OBJECT_DEPENDS ${icon_ico})
+
+	add_executable (eizoctltray WIN32 eizoctl.c eizoctltray.rc)
+	target_compile_definitions (eizoctltray PUBLIC -DUNICODE -D_UNICODE -DTRAY)
+	target_link_options (eizoctltray PUBLIC -static -municode)
+	target_include_directories (eizoctltray PUBLIC ${hidapi_INCLUDE_DIRS})
+	target_link_directories (eizoctltray PUBLIC ${hidapi_LIBRARY_DIRS})
+	target_link_libraries (eizoctltray ${hidapi_LIBRARIES} PowrProf)
 endif ()
 
 # Generate documentation from help output
@@ -77,6 +112,7 @@ install (TARGETS ${targets} DESTINATION ${CMAKE_INSTALL_BINDIR}
 		GROUP_READ GROUP_EXECUTE
 		WORLD_READ WORLD_EXECUTE
 		SETUID)
+install (TARGETS ${targets_gui} DESTINATION ${CMAKE_INSTALL_BINDIR})
 install (FILES LICENSE DESTINATION ${CMAKE_INSTALL_DOCDIR})
 
 foreach (page ${project_MAN_PAGES})
