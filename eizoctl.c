@@ -37,6 +37,10 @@
 #undef PROGRAM_NAME
 #define PROGRAM_NAME "eizoctl"
 
+#ifdef __OpenBSD__
+#define hid_init hidapi_hid_init
+#endif
+
 #if defined __GNUC__
 #define ATTRIBUTE_PRINTF(x, y) __attribute__((format(printf, x, y)))
 #else

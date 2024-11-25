@@ -34,7 +34,7 @@ Building
 Build dependencies:
  CMake, pkg-config, liberty (included), help2man +
 Runtime dependencies:
- libusb-1.0 (elksmart-comm, razer-bw-te-ctl), hidapi (eizoctl)
+ libusb-1.0 (elksmart-comm, razer-bw-te-ctl), hidapi >= 0.14 (eizoctl)
 
  $ git clone --recursive https://git.janouch.name/p/usb-drivers.git
  $ mkdir usb-drivers/build

@@ -37,7 +37,7 @@ set (CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/liberty/cmake)
 
 find_package (PkgConfig REQUIRED)
 pkg_check_modules (libusb libusb-1.0)
-pkg_search_module (hidapi hidapi hidapi-hidraw)
+pkg_search_module (hidapi hidapi hidapi-hidraw hidapi-libusb)
 
 option (WITH_LIBUSB "Compile with libusb-based utilities" ${libusb_FOUND})
 option (WITH_HIDAPI "Compile with hidapi-based utilities" ${hidapi_FOUND})
@@ -57,9 +57,13 @@ elseif (APPLE)
 endif ()
 
 if (WITH_LIBUSB AND NOT WIN32)
+	# -liconv may or may not be a part of libc
+	find_path (iconv_INCLUDE_DIRS iconv.h)
+
 	list (APPEND targets elksmart-comm)
 	add_executable (elksmart-comm elksmart-comm.c)
-	target_include_directories (elksmart-comm PUBLIC ${libusb_INCLUDE_DIRS})
+	target_include_directories (elksmart-comm
+		PUBLIC ${libusb_INCLUDE_DIRS} ${iconv_INCLUDE_DIRS})
 	target_link_directories (elksmart-comm PUBLIC ${libusb_LIBRARY_DIRS})
 	target_link_libraries (elksmart-comm ${libusb_LIBRARIES})
 endif ()
