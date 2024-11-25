@@ -15,14 +15,26 @@ and may not run at the same time, as it would contend for device access.
    partially reimplementing the Ocrustar mobile app.
    While it does not build for Windows, this is incidental.
 
+ - _razer-bw-te-ctl_ makes it possible to change the configuration of your Razer
+   BlackWidow Tournament Edition keybooard.
++
+Make sure to let the Windows Razer Synapse tool upgrade the firmware to the
+newest version before running the program.  There might be some issues otherwise
+due to protocol changes, although I don't really deem it very probable.
+
 Packages
 --------
 Regular releases are sporadic.  git master should be stable enough.
 
+You can get a package with the latest development version
+as a https://git.janouch.name/p/nixexprs[Nix derivation].
+
 Building
 --------
-Build dependencies: CMake, pkg-config, liberty (included) +
-Runtime dependencies: libusb-1.0 (elksmart-comm), hidapi (eizoctl)
+Build dependencies:
+ CMake, pkg-config, liberty (included), help2man +
+Runtime dependencies:
+ libusb-1.0 (elksmart-comm, razer-bw-te-ctl), hidapi (eizoctl)
 
  $ git clone --recursive https://git.janouch.name/p/usb-drivers.git
  $ mkdir desktop-tools/build

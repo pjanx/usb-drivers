@@ -40,7 +40,31 @@ if (WITH_LIBUSB)
 	target_include_directories (elksmart-comm PUBLIC ${libusb_INCLUDE_DIRS})
 	target_link_directories (elksmart-comm PUBLIC ${libusb_LIBRARY_DIRS})
 	target_link_libraries (elksmart-comm ${libusb_LIBRARIES})
+
+	list (APPEND targets razer-bw-te-ctl)
+	add_executable (razer-bw-te-ctl razer-bw-te-ctl.c)
+	target_include_directories (razer-bw-te-ctl PUBLIC ${libusb_INCLUDE_DIRS})
+	target_link_directories (razer-bw-te-ctl PUBLIC ${libusb_LIBRARY_DIRS})
+	target_link_libraries (razer-bw-te-ctl ${libusb_LIBRARIES})
 endif ()
+
+# Generate documentation from help output
+find_program (HELP2MAN_EXECUTABLE help2man)
+if (NOT HELP2MAN_EXECUTABLE)
+	message (FATAL_ERROR "help2man not found")
+endif ()
+
+foreach (target ${targets})
+	set (page_output "${PROJECT_BINARY_DIR}/${target}.1")
+	list (APPEND project_MAN_PAGES "${page_output}")
+	add_custom_command (OUTPUT ${page_output}
+		COMMAND ${HELP2MAN_EXECUTABLE} -N
+			"${PROJECT_BINARY_DIR}/${target}" -o ${page_output}
+		DEPENDS ${target}
+		COMMENT "Generating man page for ${target}" VERBATIM)
+endforeach ()
+
+add_custom_target (docs ALL DEPENDS ${project_MAN_PAGES})
 
 # The files to be installed
 include (GNUInstallDirs)
@@ -54,6 +78,12 @@ install (TARGETS ${targets} DESTINATION ${CMAKE_INSTALL_BINDIR}
 		WORLD_READ WORLD_EXECUTE
 		SETUID)
 install (FILES LICENSE DESTINATION ${CMAKE_INSTALL_DOCDIR})
+
+foreach (page ${project_MAN_PAGES})
+	string (REGEX MATCH "\\.([0-9])$" manpage_suffix "${page}")
+	install (FILES "${page}"
+		DESTINATION "${CMAKE_INSTALL_MANDIR}/man${CMAKE_MATCH_1}")
+endforeach ()
 
 # CPack
 set (CPACK_PACKAGE_VENDOR "Premysl Eric Janouch")
