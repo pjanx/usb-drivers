@@ -126,12 +126,13 @@ include (GNUInstallDirs)
 
 # These should be accessible by users, but need to touch system devices.
 # Use the setuid bit, for simplicity.
+set (SETUID "SETUID" CACHE STRING "Set this empty on permission issues")
 install (TARGETS ${targets} DESTINATION ${CMAKE_INSTALL_BINDIR}
 	PERMISSIONS
 		OWNER_WRITE OWNER_READ OWNER_EXECUTE
 		GROUP_READ GROUP_EXECUTE
 		WORLD_READ WORLD_EXECUTE
-		SETUID)
+		${SETUID})
 install (TARGETS ${targets_gui} DESTINATION ${CMAKE_INSTALL_BINDIR})
 install (FILES LICENSE DESTINATION ${CMAKE_INSTALL_DOCDIR})
 
