@@ -20,7 +20,7 @@ and may not run at the same time, as it would contend for device access.
 eizoctltray
 ~~~~~~~~~~~
 _eizoctltray_ is a derived Windows utility that can stay in the systray.
-When holding the Shift or Control keys while switching singnal inputs,
+When holding the Shift or Control keys while switching signal inputs,
 it will also suspend or power off the system, respectively.
 
 image::eizoctltray.png["eizoctltray with expanded context menu", 343, 229]
