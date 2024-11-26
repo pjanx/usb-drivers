@@ -950,7 +950,7 @@ eizo_watch(struct eizo_monitor *m)
 			continue;
 		}
 		if (r->report_size == 16)
-			for (size_t i = 0; i < rlen; i += 2)
+			for (size_t i = 0; i + 1 < rlen; i += 2)
 				printf(" %04x", peek_u16le(&buf[7 + i]));
 		else
 			for (size_t i = 0; i < rlen; i++)
