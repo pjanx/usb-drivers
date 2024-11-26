@@ -1,5 +1,5 @@
 cmake_minimum_required (VERSION 3.10)
-project (usb-drivers VERSION 0.1.0
+project (usb-drivers VERSION 1.0.0
 	DESCRIPTION "User space USB drivers" LANGUAGES C)
 
 # Moar warnings

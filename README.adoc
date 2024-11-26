@@ -49,9 +49,11 @@ due to protocol changes, although I don't really deem it very probable.
 Packages
 --------
 Regular releases are sporadic.  git master should be stable enough.
-
 You can get a package with the latest development version
 as a https://git.janouch.name/p/nixexprs[Nix derivation].
+
+Windows binaries can be downloaded from
+https://git.janouch.name/p/usb-drivers/releases[the Releases page on Gitea].
 
 Building
 --------
