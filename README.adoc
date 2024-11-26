@@ -2,22 +2,46 @@ USB drivers
 ===========
 :compact-option:
 
-_usb-drivers_ is a collection of utilities to control various hardware over USB:
+_usb-drivers_ is a collection of utilities to control various hardware over USB.
 
- - _eizoctl_ controls elementary settings of EIZO computer monitors.
-+
+Utility overview
+----------------
+
+eizoctl
+~~~~~~~
+_eizoctl_ controls elementary settings of EIZO computer monitors, which do not
+support DDC/CI.  Say no to oily stains on your monitor's frame!
+
+ $ eizoctl --brightness +0.5 --input USB-C
+
 It is intended as a replacement for official EIZO software,
 and may not run at the same time, as it would contend for device access.
 
- - _eizoctltray_ is a derived Windows utility that can stay in the systray.
+eizoctltray
+~~~~~~~~~~~
+_eizoctltray_ is a derived Windows utility that can stay in the systray.
+When holding the Shift or Control keys while switching singnal inputs,
+it will also suspend or power off the system, respectively.
 
- - _elksmart-comm_ interfaces with ELK Smart infrared dongles,
-   partially reimplementing the Ocrustar mobile app.
-   While it does not build for Windows, this is incidental.
+image::eizoctltray.png["eizoctltray with expanded context menu", 343, 229]
 
- - _razer-bw-te-ctl_ makes it possible to change the configuration of your Razer
-   BlackWidow Tournament Edition keybooard.
-+
+elksmart-comm
+~~~~~~~~~~~~~
+_elksmart-comm_ interfaces with ELK Smart infrared dongles EKX4S and EKX5S-T,
+partially reimplementing the Ocrustar mobile app.  It can both receive and send,
+although the older dongle is extremely unreliable at receiving.
+
+To mimic the Nikon ML-L3 infrared wireless remote control:
+
+ $ elksmart-comm 80ffffffffffffc71c5f1bda1bffffffffffffffffffffffffffffff3a7bffffffffffff99185f1bda1b03
+
+While it does not build for Windows, this is incidental.
+
+razer-bw-te-ctl
+~~~~~~~~~~~~~~~
+_razer-bw-te-ctl_ makes it possible to change the configuration of your Razer
+BlackWidow Tournament Edition keybooard (the 2012 model).
+
 Make sure to let the Windows Razer Synapse tool upgrade the firmware to the
 newest version before running the program.  There might be some issues otherwise
 due to protocol changes, although I don't really deem it very probable.
