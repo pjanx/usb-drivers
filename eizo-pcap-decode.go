@@ -1,4 +1,4 @@
-// Usage: tshark { -r FILE | -i INTERFACE } -l -T ek \
+// Usage: tshark { -r FILE | -i INTERFACE } -l -T ek --disable-protocol usbhid \
 // | go run eizo-pcap-decode.go [ | less -R]
 //
 // This cannot be done through -T json, because tshark doesn't immediately
