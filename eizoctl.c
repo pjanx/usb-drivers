@@ -880,6 +880,20 @@ eizo_get_input_port(struct eizo_monitor *m, uint16_t *port)
 	return true;
 }
 
+static void
+eizo_get_input_ports(struct eizo_monitor *m, uint16_t *ports, size_t size)
+{
+	struct eizo_profile_item *item = &m->profile[EIZO_PROFILE_KEY_INPUT_PORTS];
+	if (item->len) {
+		for (size_t i = 0; i < size && i < item->len / 4; i++)
+			ports[i] = peek_u16le(item->data + i * 4);
+	} else {
+		const uint16_t *db = eizo_ports_by_product_name(m->product);
+		for (size_t i = 0; i < size && db && db[i]; i++)
+			ports[i] = db[i];
+	}
+}
+
 static uint16_t
 eizo_resolve_port(struct eizo_monitor *m, const char *port)
 {
@@ -1114,7 +1128,7 @@ main(int argc, char *argv[])
 }
 
 // --- Windows -----------------------------------------------------------------
-#else
+#elif defined _WIN32
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -1208,24 +1222,15 @@ append_monitor(struct eizo_monitor *m, HMENU menu, UINT_PTR base)
 	AppendMenu(menu, flags_darker,   base + IDM_DARKER,   L"Darker");
 	AppendMenu(menu, MF_SEPARATOR, 0, NULL);
 
-	uint16_t ports[16] = {0};
-	struct eizo_profile_item *item = &m->profile[EIZO_PROFILE_KEY_INPUT_PORTS];
-	if (item->len) {
-		for (size_t i = 0; i < 15 && i < item->len / 4; i++)
-			ports[i] = peek_u16le(item->data + i * 4);
-	} else {
-		const uint16_t *db = eizo_ports_by_product_name(m->product);
-		for (size_t i = 0; i < 15 && db && db[i]; i++)
-			ports[i] = db[i];
-	}
-
-	uint16_t current = 0;
+	uint16_t ports[16] = {0}, current = 0;
+	eizo_get_input_ports(m, ports, sizeof ports / sizeof ports[0] - 1);
 	(void) eizo_get_input_port(m, &current);
 	if (!ports[0])
 		ports[0] = current;
 
 	// USB-C ports are a bit tricky, they only need to be /displayed/ as such.
-	item = &m->profile[EIZO_PROFILE_KEY_USB_C_INPUT_PORTS];
+	struct eizo_profile_item *item =
+		&m->profile[EIZO_PROFILE_KEY_USB_C_INPUT_PORTS];
 	for (size_t i = 0; ports[i]; i++) {
 		uint8_t usb_c = 0;
 		for (size_t u = 0; u < item->len / 2; u++)
@@ -1440,6 +1445,278 @@ wWinMain(
 	}
 	(void) Shell_NotifyIcon(NIM_DELETE, &nid);
 	return msg.wParam;
+}
+
+// --- macOS -------------------------------------------------------------------
+#elif defined __APPLE__
+
+#include <AppKit/AppKit.h>
+#include <AppKit/NSStatusBar.h>
+#include <Foundation/Foundation.h>
+
+static void message_output(const char *format, ...) ATTRIBUTE_PRINTF(1, 2);
+static void message_error(const char *format, ...) ATTRIBUTE_PRINTF(1, 2);
+
+static void
+message_output(const char *format, ...)
+{
+	va_list ap;
+	va_start(ap, format);
+	NSString *message = [[NSString alloc]
+		initWithFormat:[NSString stringWithUTF8String: format] arguments:ap];
+	va_end(ap);
+
+	NSAlert *alert = [NSAlert new];
+	[alert setMessageText:message];
+	[alert setAlertStyle:NSAlertStyleInformational];
+	// XXX: How to make the OK button the first responder?
+	[alert addButtonWithTitle:@"OK"];
+	[NSApp activate];
+	[alert.window makeKeyAndOrderFront:nil];
+	[alert runModal];
+}
+
+static void
+message_error(const char *format, ...)
+{
+	va_list ap;
+	va_start(ap, format);
+	NSString *message = [[NSString alloc]
+		initWithFormat:[NSString stringWithUTF8String: format] arguments:ap];
+	va_end(ap);
+
+	NSAlert *alert = [NSAlert new];
+	[alert setMessageText:message];
+	[alert setAlertStyle:NSAlertStyleCritical];
+	[alert addButtonWithTitle:@"OK"];
+	[NSApp activate];
+	[alert.window makeKeyAndOrderFront:nil];
+	[alert runModal];
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+/// Monitor provides reference counting, and enables use of NSArray.
+@interface Monitor : NSObject
+@property (assign, nonatomic) struct eizo_monitor *monitor;
+- (instancetype)initWithMonitor:(struct eizo_monitor *)monitor;
+@end
+
+@implementation Monitor
+
+- (instancetype)initWithMonitor:(struct eizo_monitor *)monitor {
+	if (self = [super init]) {
+		_monitor = monitor;
+	}
+	return self;
+}
+
+- (void)dealloc {
+	if (_monitor) {
+		eizo_monitor_close(_monitor);
+		free(_monitor);
+		_monitor = NULL;
+	}
+}
+
+@end
+
+@interface ApplicationDelegate
+	: NSObject <NSApplicationDelegate, NSMenuDelegate>
+@property (strong, nonatomic) NSStatusItem *statusItem;
+@property (strong, nonatomic) NSMutableArray<Monitor *> *monitors;
+@end
+
+@implementation ApplicationDelegate
+
+- (Monitor *)getMonitorFrom:(NSControl *)control {
+	NSInteger index = control.tag / 0x1000;
+	if (!self.monitors || index < 0 || index >= self.monitors.count)
+		return nil;
+	return self.monitors[index];
+}
+
+- (void)setBrightness:(NSControl *)sender {
+	Monitor *m = [self getMonitorFrom:sender];
+	if (!m)
+		return;
+	eizo_set_brightness(m.monitor, sender.doubleValue);
+}
+
+- (void)setInputPort:(NSControl *)sender {
+	Monitor *m = [self getMonitorFrom:sender];
+	NSUInteger input = sender.tag % 0x1000;
+	if (!m)
+		return;
+	eizo_set_input_port(m.monitor, input);
+
+	NSEventModifierFlags mods = [NSEvent modifierFlags];
+	if (mods & NSEventModifierFlagShift) {
+		NSTask *task = [[NSTask alloc] init];
+		task.launchPath = @"/usr/bin/pmset";
+		task.arguments = @[@"sleepnow"];
+		[task launch];
+	}
+}
+
+- (void)appendMonitor:(Monitor *)m toMenu:(NSMenu *)menu base:(NSInteger)base {
+	NSMenuItem *titleItem = [NSMenuItem new];
+	titleItem.attributedTitle = [[NSAttributedString alloc]
+		initWithString:[NSString stringWithFormat:@"%s %s",
+			m.monitor->product, m.monitor->serial]
+		attributes:@{ NSFontAttributeName: [NSFont boldSystemFontOfSize:0] }];
+	[menu addItem:titleItem];
+	[menu addItem:[NSMenuItem separatorItem]];
+	[menu addItem:[NSMenuItem sectionHeaderWithTitle:@"Brightness"]];
+
+	double brightness = 0;
+	(void) eizo_get_brightness(m.monitor, &brightness);
+
+	// XXX: So, while having a slider is strictly more useful,
+	// this is not something you're supposed to do in AppKit, if only because:
+	//  - It does not respond to keyboard.
+	//  - Positioning it properly is dark magic.
+	NSSlider *slider = [NSSlider
+		sliderWithValue:brightness minValue:0. maxValue:1.
+		target:self action:@selector(setBrightness:)];
+	slider.tag = base;
+	slider.continuous = true;
+
+	NSView *sliderView = [[NSView alloc]
+		initWithFrame:NSMakeRect(0, 0, 200., slider.knobThickness + 2.)];
+	[sliderView addSubview:slider];
+	slider.translatesAutoresizingMaskIntoConstraints = false;
+	[NSLayoutConstraint activateConstraints:@[
+        [slider.leftAnchor
+			constraintEqualToAnchor:sliderView.leftAnchor constant:+23.],
+        [slider.rightAnchor
+			constraintEqualToAnchor:sliderView.rightAnchor constant:-6.],
+        [slider.centerYAnchor
+			constraintEqualToAnchor:sliderView.centerYAnchor]
+    ]];
+
+	NSMenuItem *brightnessItem = [[NSMenuItem alloc]
+		initWithTitle:@"" action:nil keyEquivalent:@""];
+	brightnessItem.view = sliderView;
+
+	[menu addItem:brightnessItem];
+	[menu addItem:[NSMenuItem separatorItem]];
+	[menu addItem:[NSMenuItem sectionHeaderWithTitle:@"Input ports"]];
+
+	uint16_t ports[16] = {0}, current = 0;
+	eizo_get_input_ports(m.monitor, ports, sizeof ports / sizeof ports[0] - 1);
+	(void) eizo_get_input_port(m.monitor, &current);
+	if (!ports[0])
+		ports[0] = current;
+
+	// USB-C ports are a bit tricky, they only need to be /displayed/ as such.
+	struct eizo_profile_item *item =
+		&m.monitor->profile[EIZO_PROFILE_KEY_USB_C_INPUT_PORTS];
+	for (size_t i = 0; ports[i]; i++) {
+		uint8_t usb_c = 0;
+		for (size_t u = 0; u < item->len / 2; u++)
+			if (ports[i] == peek_u16le(item->data + u * 2))
+				usb_c = u + 1;
+
+		NSString *title = nil;
+		if (!usb_c)
+			title = [NSString stringWithUTF8String:eizo_port_to_name(ports[i])];
+		else if (usb_c == 1)
+			title = [NSString stringWithUTF8String:g_port_names_usb_c[0]];
+		else
+			title = [NSString stringWithFormat:@"%s %u",
+				g_port_names_usb_c[0], usb_c];
+
+		NSMenuItem *inputPortItem = [[NSMenuItem alloc]
+			initWithTitle:title action:@selector(setInputPort:)
+			keyEquivalent:@""];
+		inputPortItem.tag = base + ports[i];
+		if (ports[i] == current)
+			inputPortItem.state = NSControlStateValueOn;
+		[menu addItem:inputPortItem];
+	}
+}
+
+- (void)showMenu {
+	struct hid_device_info *devs = hid_enumerate(USB_VID_EIZO, 0);
+	NSMutableArray<Monitor *> *monitors = [NSMutableArray array];
+	NSMenu *menu = [NSMenu new];
+	[menu setDelegate:self];
+	for (struct hid_device_info *p = devs; p; p = p->next) {
+		struct eizo_monitor *m = calloc(1, sizeof *m);
+		if (!m)
+			continue;
+
+		if (!eizo_monitor_open(m, p)) {
+			message_error("%s", m->error);
+			free(m);
+			continue;
+		}
+
+		Monitor *monitor = [[Monitor alloc] initWithMonitor:m];
+		[self appendMonitor:monitor toMenu:menu base:0x1000 * monitors.count];
+		[menu addItem:[NSMenuItem separatorItem]];
+		[monitors addObject:monitor];
+	}
+	if (!monitors.count) {
+		NSMenuItem *item = [[NSMenuItem alloc]
+			initWithTitle:@"No monitors found" action:nil keyEquivalent:@""];
+		item.enabled = false;
+		[menu addItem:item];
+	}
+
+	[menu addItem:[NSMenuItem separatorItem]];
+	[menu addItem:[[NSMenuItem alloc]
+		initWithTitle:@"Quit" action:@selector(terminate:) keyEquivalent:@"q"]];
+
+	self.monitors = monitors;
+
+	// XXX: Unfortunately, this is not how menus should behave,
+	// but we really want to generate the menu on demand.
+	self.statusItem.menu = menu;
+	[self.statusItem.button performClick:nil];
+	self.statusItem.menu = nil;
+}
+
+- (void)menuDidClose:(NSMenu *)menu {
+	// Close and free up the devices as soon as possible, but no sooner.
+	dispatch_async(dispatch_get_main_queue(), ^{
+		self.monitors = nil;
+	});
+}
+
+- (void)applicationDidFinishLaunching:(NSNotification *)notification {
+	NSStatusBar *systemBar = [NSStatusBar systemStatusBar];
+	self.statusItem = [systemBar statusItemWithLength:NSSquareStatusItemLength];
+	if (!self.statusItem.button)
+		return;
+
+	// Not bothering with templates,
+	// the icon would need to have a hole through it to look better.
+	NSImage *image = [NSApp applicationIconImage];
+	// One would expect the status bar to pick a reasonable size
+	// automatically, but that is not what happens.
+	image.size = NSMakeSize(systemBar.thickness, systemBar.thickness);
+	self.statusItem.button.image = image;
+	self.statusItem.button.action = @selector(showMenu);
+}
+
+@end
+
+int
+main(int argc, char *argv[])
+{
+	@autoreleasepool {
+		if (argc > 1)
+			return run(argc, argv, message_output, message_error, true);
+
+		NSApplication *app = [NSApplication sharedApplication];
+		ApplicationDelegate *delegate = [ApplicationDelegate new];
+		app.delegate = delegate;
+		[app setActivationPolicy:NSApplicationActivationPolicyAccessory];
+		[app run];
+	}
+	return 0;
 }
 
 #endif

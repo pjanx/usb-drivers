@@ -1,4 +1,4 @@
-cmake_minimum_required (VERSION 3.10)
+cmake_minimum_required (VERSION 3.12)
 project (usb-drivers VERSION 1.0.0
 	DESCRIPTION "User space USB drivers" LANGUAGES C)
 
@@ -35,9 +35,62 @@ endif ()
 # Dependencies
 set (CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/liberty/cmake)
 
+# TODO(p): Shove this into IconUtils.cmake.
+function (icon_to_iconset_size name svg size iconset outputs)
+	math (EXPR _size2x "${size} * 2")
+	set (_dimensions "${size}x${size}")
+	set (_png1x "${iconset}/icon_${_dimensions}.png")
+	set (_png2x "${iconset}/icon_${_dimensions}@2x.png")
+	set (${outputs} "${_png1x};${_png2x}" PARENT_SCOPE)
+
+	set (_find_program_REQUIRE)
+	if (NOT ${CMAKE_VERSION} VERSION_LESS 3.18.0)
+		set (_find_program_REQUIRE REQUIRED)
+	endif ()
+
+	find_program (rsvg_convert_EXECUTABLE rsvg-convert ${_find_program_REQUIRE})
+	add_custom_command (OUTPUT "${_png1x}" "${_png2x}"
+		COMMAND ${CMAKE_COMMAND} -E make_directory "${iconset}"
+		COMMAND ${rsvg_convert_EXECUTABLE} "--output=${_png1x}"
+			"--width=${size}" "--height=${size}" -- "${svg}"
+		COMMAND ${rsvg_convert_EXECUTABLE} "--output=${_png2x}"
+			"--width=${_size2x}" "--height=${_size2x}" -- "${svg}"
+		DEPENDS "${svg}"
+		COMMENT "Generating ${name} ${_dimensions} icons" VERBATIM)
+endfunction ()
+function (icon_to_icns svg output_basename output)
+	get_filename_component (_name "${output_basename}" NAME_WE)
+	set (_iconset "${PROJECT_BINARY_DIR}/${_name}.iconset")
+	set (_icon "${PROJECT_BINARY_DIR}/${output_basename}")
+	set (${output} "${_icon}" PARENT_SCOPE)
+
+	set (_icon_png_list)
+	foreach (_icon_size 16 32 128 256 512)
+		icon_to_iconset_size ("${_name}" "${svg}"
+			"${_icon_size}" "${_iconset}" _icon_pngs)
+		list (APPEND _icon_png_list ${_icon_pngs})
+	endforeach ()
+	add_custom_command (OUTPUT "${_icon}"
+		COMMAND iconutil -c icns -o "${_icon}" "${_iconset}"
+		DEPENDS ${_icon_png_list}
+		COMMENT "Generating ${_name} icon" VERBATIM)
+	set_source_files_properties ("${_icon}" PROPERTIES
+		MACOSX_PACKAGE_LOCATION Resources)
+endfunction ()
+
 find_package (PkgConfig REQUIRED)
 pkg_check_modules (libusb libusb-1.0)
-pkg_search_module (hidapi hidapi hidapi-hidraw hidapi-libusb)
+
+# On MSYS2, the CMake package cannot link statically, but pkg-config can.
+# On macOS, we explicitly want to use the CMake package.
+if (WIN32)
+	pkg_search_module (hidapi hidapi hidapi-hidraw hidapi-libusb)
+else ()
+	find_package (hidapi)
+	set (hidapi_INCLUDE_DIRS)
+	set (hidapi_LIBRARY_DIRS)
+	set (hidapi_LIBRARIES hidapi::hidapi)
+endif ()
 
 option (WITH_LIBUSB "Compile with libusb-based utilities" ${libusb_FOUND})
 option (WITH_HIDAPI "Compile with hidapi-based utilities" ${hidapi_FOUND})
@@ -97,7 +150,6 @@ if (WITH_HIDAPI AND WIN32)
 
 	set (icon_ico ${PROJECT_BINARY_DIR}/eizoctltray.ico)
 	icon_for_win32 (${icon_ico} "${icon_png_list}" "${icon_png}")
-	list (APPEND icon_ico_list )
 	set_property (SOURCE eizoctltray.rc
 		APPEND PROPERTY OBJECT_DEPENDS ${icon_ico})
 
@@ -108,9 +160,27 @@ if (WITH_HIDAPI AND WIN32)
 	target_link_directories (eizoctltray PUBLIC ${hidapi_LIBRARY_DIRS})
 	target_link_libraries (eizoctltray ${hidapi_LIBRARIES} powrprof)
 endif ()
+if (WITH_HIDAPI AND APPLE)
+	list (APPEND targets_gui eizoctltray)
+
+	# We override the language for the command line target as well,
+	# but that doesn't and must not pose any problems.
+	enable_language (OBJC)
+	set_source_files_properties (eizoctl.c PROPERTIES LANGUAGE OBJC)
+
+	set (MACOSX_BUNDLE_GUI_IDENTIFIER name.janouch.eizoctltray)
+	set (MACOSX_BUNDLE_ICON_FILE eizoctltray.icns)
+	icon_to_icns (${PROJECT_SOURCE_DIR}/eizoctltray.svg
+		"${MACOSX_BUNDLE_ICON_FILE}" icon)
+
+	add_executable (eizoctltray MACOSX_BUNDLE eizoctl.c "${icon}")
+	target_compile_definitions (eizoctltray PUBLIC -DTRAY)
+	target_compile_options (eizoctltray PUBLIC -fobjc-arc)
+	target_link_libraries (eizoctltray ${hidapi_LIBRARIES} "-framework Cocoa")
+endif ()
 
 # Generate documentation from help output
-if (NOT CMAKE_CROSSCOMPILING)
+if (NOT WIN32 AND NOT CMAKE_CROSSCOMPILING)
 	find_program (HELP2MAN_EXECUTABLE help2man)
 	if (NOT HELP2MAN_EXECUTABLE)
 		message (FATAL_ERROR "help2man not found")

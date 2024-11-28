@@ -19,11 +19,12 @@ and may not run at the same time, as it would contend for device access.
 
 eizoctltray
 ~~~~~~~~~~~
-_eizoctltray_ is a derived Windows utility that can stay in the systray.
+_eizoctltray_ is a derived Windows/macOS utility that can stay in the systray.
 When holding the Shift or Control keys while switching signal inputs,
 it will also suspend or power off the system, respectively.
 
-image::eizoctltray.png["eizoctltray with expanded context menu", 343, 229]
+image:eizoctltray-win.png["eizoctltray on Windows with expanded menu", 343, 278]
+image:eizoctltray-mac.png["eizoctltray on macOS with expanded menu", 343, 278]
 
 elksmart-comm
 ~~~~~~~~~~~~~
@@ -76,6 +77,29 @@ Or you can try telling CMake to make a package for you.  For Debian it is:
 
  $ cpack -G DEB
  # dpkg -i usb-drivers-*.deb
+
+Windows
+~~~~~~~
+You can either build within an MSYS2 environment,
+or cross-compile using Mingw-w64:
+
+ $ sh -e cmake/Win64Depends.sh
+ $ cmake -DCMAKE_TOOLCHAIN_FILE=liberty/cmake/toolchains/MinGW-w64-x64.cmake \
+   -DCMAKE_BUILD_TYPE=Release -B build
+ $ cmake --build build
+
+macOS
+~~~~~
+You can either build _eizoctltray_ against Homebrew,
+or link hidapi statically for a standalone portable app:
+
+ $ git clone https://github.com/libusb/hidapi.git
+ $ cmake -S hidapi -DBUILD_SHARED_LIBS=OFF \
+   -DCMAKE_INSTALL_PREFIX=$PWD/hidapi-build \
+   -DCMAKE_BUILD_TYPE=Release -B hidapi-build
+ $ cmake --build hidapi-build -- install
+ $ cmake -Dhidapi_ROOT=$PWD/hidapi-build -DCMAKE_BUILD_TYPE=Release -B build
+ $ cmake --build build
 
 Contributing and Support
 ------------------------
