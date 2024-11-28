@@ -73,10 +73,17 @@ var (
 	fmtIn, fmtOut, fmtReset string
 )
 
-func decodeSubreport(data []byte) string {
-	if len(data) < 6 {
+func decodeSubreport(id byte, data []byte) string {
+	critical := isCriticalSubreport(id)
+	if len(data) < 6 || critical && len(data) < 8 {
 		return fmt.Sprintf("%x", data)
 	}
+
+	var cs uint16
+	if critical {
+		data, cs = data[2:], le.Uint16(data[0:2])
+	}
+
 	usage := uint32(le.Uint16(data[:2]))<<16 | uint32(le.Uint16(data[2:4]))
 	filtered := make([]byte, len(data)-6)
 	for i, b := range data[6:] {
@@ -86,8 +93,17 @@ func decodeSubreport(data []byte) string {
 			filtered[i] = b
 		}
 	}
-	return fmt.Sprintf("<> %08x %04x %x %s", usage, le.Uint16(data[4:6]),
-		data[6:], string(filtered))
+	if critical {
+		return fmt.Sprintf("<> %08x %04x=%04x %x %s",
+			usage, cs, le.Uint16(data[4:6]), data[6:], string(filtered))
+	} else if usage == 0xff0000f1 {
+		// No idea what this is, but it follows the format.
+		return fmt.Sprintf("<> %08x %04x %s",
+			usage, le.Uint16(data[4:6]), decodeMP(data[6:]))
+	} else {
+		return fmt.Sprintf("<> %08x %04x %x %s",
+			usage, le.Uint16(data[4:6]), data[6:], string(filtered))
+	}
 }
 
 func decodeResult(data []byte) string {
@@ -131,6 +147,14 @@ func isGetSubreport(id byte) bool {
 	return false
 }
 
+func isCriticalSubreport(id byte) bool {
+	switch id {
+	case 11, 12, 13, 14:
+		return true
+	}
+	return false
+}
+
 func isSubreport(id byte) bool {
 	return isSetSubreport(id) || isGetSubreport(id)
 }
@@ -143,7 +167,7 @@ func processInterrupt(p *Packet) {
 	if *raw {
 		fmt.Printf("%s INT %02x %x\n", p.addr(), data[0], data[1:])
 	} else if isSubreport(data[0]) {
-		fmt.Printf("%s INT %s\n", p.addr(), decodeSubreport(data[1:]))
+		fmt.Printf("%s INT %s\n", p.addr(), decodeSubreport(data[0], data[1:]))
 	}
 }
 
@@ -163,7 +187,7 @@ func processControl(p *Packet) {
 			fmt.Printf("%s IN  SR %x\n", p.addr(), data[5:])
 		} else if isGetSubreport(data[0]) {
 			fmt.Printf("%s IN  %s%s%s\n", p.addr(),
-				fmtIn, decodeSubreport(data[1:]), fmtReset)
+				fmtIn, decodeSubreport(data[0], data[1:]), fmtReset)
 		} else if data[0] == 6 {
 			fmt.Printf("%s IN  PC %04x\n", p.addr(), le.Uint16(data[1:]))
 		} else if data[0] == 7 {
@@ -172,6 +196,8 @@ func processControl(p *Packet) {
 			fmt.Printf("%s IN  ID %s %s\n", p.addr(), data[1:9], data[9:])
 		} else if data[0] == 9 {
 			fmt.Printf("%s IN  MP %s\n", p.addr(), decodeMP(data[1:]))
+		} else if data[0] == 10 {
+			fmt.Printf("%s IN  CS %04x\n", p.addr(), le.Uint16(data[1:]))
 		} else {
 			fmt.Printf("%s IN  %02x %x\n", p.addr(), data[0], data[1:])
 		}
@@ -180,7 +206,9 @@ func processControl(p *Packet) {
 			fmt.Printf("%s OUT %02x %x\n", p.addr(), data[0], data[1:])
 		} else if isSetSubreport(data[0]) {
 			fmt.Printf("%s OUT %s%s%s\n", p.addr(),
-				fmtOut, decodeSubreport(data[1:]), fmtReset)
+				fmtOut, decodeSubreport(data[0], data[1:]), fmtReset)
+		} else if data[0] == 10 {
+			fmt.Printf("%s OUT CS %04x\n", p.addr(), le.Uint16(data[1:]))
 		} else if data[0] != 1 && !isGetSubreport(data[0]) {
 			fmt.Printf("%s OUT %02x %x\n", p.addr(), data[0], data[1:])
 		}
