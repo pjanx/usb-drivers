@@ -157,25 +157,30 @@ if (NOT WIN32 AND NOT CMAKE_CROSSCOMPILING)
 endif ()
 
 # The files to be installed
-include (GNUInstallDirs)
+if (NOT WIN32)
+	include (GNUInstallDirs)
 
-# These should be accessible by users, but need to touch system devices.
-# Use the setuid bit, for simplicity.
-set (SETUID "SETUID" CACHE STRING "Set this empty on permission issues")
-install (TARGETS ${targets} DESTINATION ${CMAKE_INSTALL_BINDIR}
-	PERMISSIONS
-		OWNER_WRITE OWNER_READ OWNER_EXECUTE
-		GROUP_READ GROUP_EXECUTE
-		WORLD_READ WORLD_EXECUTE
-		${SETUID})
-install (TARGETS ${targets_gui} DESTINATION ${CMAKE_INSTALL_BINDIR})
-install (FILES LICENSE DESTINATION ${CMAKE_INSTALL_DOCDIR})
+	# These should be accessible by users, but need to touch system devices.
+	# Use the setuid bit, for simplicity.
+	set (SETUID "SETUID" CACHE STRING "Set this empty on permission issues")
+	install (TARGETS ${targets} DESTINATION ${CMAKE_INSTALL_BINDIR}
+		PERMISSIONS
+			OWNER_WRITE OWNER_READ OWNER_EXECUTE
+			GROUP_READ GROUP_EXECUTE
+			WORLD_READ WORLD_EXECUTE
+			${SETUID})
+	install (TARGETS ${targets_gui} DESTINATION ${CMAKE_INSTALL_BINDIR})
+	install (FILES LICENSE DESTINATION ${CMAKE_INSTALL_DOCDIR})
+	foreach (page ${project_MAN_PAGES})
+		string (REGEX MATCH "\\.([0-9])$" manpage_suffix "${page}")
+		install (FILES "${page}"
+			DESTINATION "${CMAKE_INSTALL_MANDIR}/man${CMAKE_MATCH_1}")
+	endforeach ()
 
-foreach (page ${project_MAN_PAGES})
-	string (REGEX MATCH "\\.([0-9])$" manpage_suffix "${page}")
-	install (FILES "${page}"
-		DESTINATION "${CMAKE_INSTALL_MANDIR}/man${CMAKE_MATCH_1}")
-endforeach ()
+	set (CPACK_SET_DESTDIR TRUE)
+else ()
+	install (TARGETS ${targets} ${targets_gui} DESTINATION .)
+endif ()
 
 # CPack
 set (CPACK_PACKAGE_VENDOR "Premysl Eric Janouch")
@@ -189,5 +194,4 @@ set (CPACK_SOURCE_GENERATOR "TGZ;ZIP")
 set (CPACK_SOURCE_IGNORE_FILES "/\\\\.git;/build;/CMakeLists.txt.user")
 set (CPACK_SOURCE_PACKAGE_FILE_NAME "${PROJECT_NAME}-${PROJECT_VERSION}")
 
-set (CPACK_SET_DESTDIR TRUE)
 include (CPack)
