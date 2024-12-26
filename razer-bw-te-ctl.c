@@ -198,8 +198,8 @@ parse_options(int argc, char *argv[],
 	};
 
 	if (argc == 1) {
-		show_usage (argv[0]);
-		exit (EXIT_FAILURE);
+		show_usage(argv[0]);
+		exit(EXIT_FAILURE);
 	}
 
 	int c;
@@ -256,7 +256,7 @@ parse_options(int argc, char *argv[],
 			!strcasecmp(optarg, "on") ||
 			!strcasecmp(optarg, "yes")) {
 			new_config->gaming_mode = true;
-		} else if (!strcasecmp (optarg, "false") ||
+		} else if (!strcasecmp(optarg, "false") ||
 			!strcasecmp(optarg, "off") ||
 			!strcasecmp(optarg, "no")) {
 			new_config->gaming_mode = false;
@@ -362,7 +362,7 @@ main(int argc, char *argv[])
 
 	if ((result = apply_options(device, &options, &new_config)))
 		FAIL(error_4, "operation failed: %s\n",
-			libusb_error_name (result));
+			libusb_error_name(result));
 error_4:
 	if ((result = libusb_release_interface(device, BW_CTL_IFACE)))
 		FAIL(error_3, "couldn't release interface: %s\n",

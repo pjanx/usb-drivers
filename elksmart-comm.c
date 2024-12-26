@@ -196,7 +196,7 @@ compress_value(unsigned value, struct str *encoded)
 }
 
 static void
-compress_pulses (const struct pulse *pulses, size_t len, struct str *encoded)
+compress_pulses(const struct pulse *pulses, size_t len, struct str *encoded)
 {
 	unsigned counts[len];
 	memset(counts, 0, sizeof counts);
@@ -527,15 +527,15 @@ send_identify(libusb_device_handle *device, struct error **e)
 #if 0
 	// The EKX4S does not respond to this request.
 	static uint8_t c_serial[] = { -5, -5, -5, -5 };
-	if ((result = libusb_bulk_transfer (device, g.endpoint_out,
+	if ((result = libusb_bulk_transfer(device, g.endpoint_out,
 		c_serial, sizeof c_serial, &len, 100)))
-		return error_set (e, "serial/send: %s", libusb_strerror (result));
-	if ((result = libusb_bulk_transfer (device, g.endpoint_in,
+		return error_set(e, "serial/send: %s", libusb_strerror(result));
+	if ((result = libusb_bulk_transfer(device, g.endpoint_in,
 		buffer, sizeof buffer, &len, 100)))
-		return error_set (e, "serial/recv: %s", libusb_strerror (result));
+		return error_set(e, "serial/recv: %s", libusb_strerror(result));
 	if (len < (int) sizeof c_serial ||
-		memcmp (buffer, c_serial, sizeof c_serial))
-		return error_set (e, "serial retrieval failed");
+		memcmp(buffer, c_serial, sizeof c_serial))
+		return error_set(e, "serial retrieval failed");
 #endif
 	return true;
 }
