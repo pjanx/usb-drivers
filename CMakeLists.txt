@@ -138,19 +138,27 @@ endif ()
 
 # Generate documentation from help output
 if (NOT WIN32 AND NOT CMAKE_CROSSCOMPILING)
-	find_program (HELP2MAN_EXECUTABLE help2man)
-	if (NOT HELP2MAN_EXECUTABLE)
-		message (FATAL_ERROR "help2man not found")
-	endif ()
+	set (HELP2ADOC "${PROJECT_SOURCE_DIR}/liberty/tools/help2adoc.awk")
+	set (ASCIIMAN "${PROJECT_SOURCE_DIR}/liberty/tools/asciiman.awk")
 
 	foreach (target ${targets})
-		set (page_output "${PROJECT_BINARY_DIR}/${target}.1")
-		list (APPEND project_MAN_PAGES "${page_output}")
-		add_custom_command (OUTPUT ${page_output}
-			COMMAND ${HELP2MAN_EXECUTABLE} -N
-				"${PROJECT_BINARY_DIR}/${target}" -o ${page_output}
-			DEPENDS ${target}
-			COMMENT "Generating man page for ${target}" VERBATIM)
+		set (page_adoc "${PROJECT_BINARY_DIR}/${target}.1.adoc")
+		set (page_roff "${PROJECT_BINARY_DIR}/${target}.1")
+		list (APPEND project_MAN_PAGES "${page_roff}")
+
+		# $<TARGET_FILE:tgt> could be used, if we didn't have to escape it.
+		string (REPLACE "\\" "\\\\"
+			target_path "${PROJECT_BINARY_DIR}/${target}")
+		add_custom_command (OUTPUT "${page_adoc}"
+			COMMAND env LC_ALL=C awk -f "${HELP2ADOC}"
+				-v "Target=${target_path}" > "${page_adoc}"
+			DEPENDS "${target}" "${HELP2ADOC}"
+			COMMENT "Generating AsciiDoc man page for ${target}" VERBATIM)
+		add_custom_command (OUTPUT "${page_roff}"
+			COMMAND env LC_ALL=C awk -f "${ASCIIMAN}"
+				"${page_adoc}" > "${page_roff}"
+			DEPENDS "${page_adoc}" "${ASCIIMAN}"
+			COMMENT "Generating roff man page for ${target}" VERBATIM)
 	endforeach ()
 
 	add_custom_target (docs ALL DEPENDS ${project_MAN_PAGES})
