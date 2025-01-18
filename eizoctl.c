@@ -803,7 +803,7 @@ eizo_port_by_name(const char *name)
 	return index;
 }
 
-static char *
+static const char *
 eizo_port_to_name(uint16_t port)
 {
 	const char *stem = NULL;
@@ -811,14 +811,14 @@ eizo_port_to_name(uint16_t port)
 	if (group && group < sizeof g_port_names / sizeof g_port_names[0])
 		stem = g_port_names[group][0];
 
-	static char buffer[32] = "";
+	static char buf[32] = "";
 	if (!stem)
-		snprintf(buffer, sizeof buffer, "%x", port);
+		snprintf(buf, sizeof buf, "%x", port);
 	else if (!number)
-		snprintf(buffer, sizeof buffer, "%s", stem);
+		snprintf(buf, sizeof buf, "%s", stem);
 	else
-		snprintf(buffer, sizeof buffer, "%s %d", stem, (number + 1));
-	return buffer;
+		snprintf(buf, sizeof buf, "%s %d", stem, (number + 1));
+	return buf;
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -895,7 +895,7 @@ eizo_get_input_ports(struct eizo_monitor *m, uint16_t *ports, size_t size)
 }
 
 static uint16_t
-eizo_resolve_port(struct eizo_monitor *m, const char *port)
+eizo_resolve_port_by_name(struct eizo_monitor *m, const char *port)
 {
 	uint8_t usb_c_index = 0;
 	if (eizo_port_by_name_in_group(port, g_port_names_usb_c, &usb_c_index)) {
@@ -905,6 +905,26 @@ eizo_resolve_port(struct eizo_monitor *m, const char *port)
 			return peek_u16le(item->data + usb_c_index * 2);
 	}
 	return eizo_port_by_name(port);
+}
+
+static const char *
+eizo_resolve_port_to_name(struct eizo_monitor *m, uint16_t port)
+{
+	// USB-C ports are a bit tricky, they only need to be /displayed/ as such.
+	struct eizo_profile_item *item =
+		&m->profile[EIZO_PROFILE_KEY_USB_C_INPUT_PORTS];
+	for (uint8_t i = 0; i < item->len / 2; i++) {
+		if (port != peek_u16le(item->data + i * 2))
+			continue;
+
+		static char buf[32] = "";
+		if (!i)
+			snprintf(buf, sizeof buf, "%s", g_port_names_usb_c[0]);
+		else
+			snprintf(buf, sizeof buf, "%s %u", g_port_names_usb_c[0], (i + 1));
+		return buf;
+	}
+	return eizo_port_to_name(port);
 }
 
 static bool
@@ -1118,13 +1138,12 @@ run(int argc, char *argv[], print_fn output, print_fn error)
 		}
 		if (port) {
 			uint16_t prev = 0;
-			uint16_t next = eizo_resolve_port(&m, port);
+			uint16_t next = eizo_resolve_port_by_name(&m, port);
 			if (!eizo_get_input_port(&m, &prev)) {
 				error("Failed to get input port: %s\n", m.error);
 			} else if (!strcmp(port, "?")) {
-				// XXX: This does not report USB-C.
 				output("%s %s: input: %s\n",
-					m.product, m.serial, eizo_port_to_name(prev));
+					m.product, m.serial, eizo_resolve_port_to_name(&m, prev));
 			} else if (!next) {
 				error("Failed to resolve port name: %s\n", port);
 			} else {
@@ -1283,21 +1302,9 @@ append_monitor(struct eizo_monitor *m, HMENU menu, UINT_PTR base)
 	if (!ports[0])
 		ports[0] = current;
 
-	// USB-C ports are a bit tricky, they only need to be /displayed/ as such.
-	struct eizo_profile_item *item =
-		&m->profile[EIZO_PROFILE_KEY_USB_C_INPUT_PORTS];
 	for (size_t i = 0; ports[i]; i++) {
-		uint8_t usb_c = 0;
-		for (size_t u = 0; u < item->len / 2; u++)
-			if (ports[i] == peek_u16le(item->data + u * 2))
-				usb_c = u + 1;
-
-		if (!usb_c)
-			snwprintf(buf, sizeof buf, L"%s", eizo_port_to_name(ports[i]));
-		else if (usb_c == 1)
-			snwprintf(buf, sizeof buf, L"%s", g_port_names_usb_c[0]);
-		else
-			snwprintf(buf, sizeof buf, L"%s %u", g_port_names_usb_c[0], usb_c);
+		snwprintf(buf, sizeof buf, L"%s",
+			eizo_resolve_port_to_name(m, ports[i]));
 
 		UINT flags = MF_STRING;
 		if (ports[i] == current)
@@ -1664,23 +1671,9 @@ message_error(const char *format, ...)
 	if (!ports[0])
 		ports[0] = current;
 
-	// USB-C ports are a bit tricky, they only need to be /displayed/ as such.
-	struct eizo_profile_item *item =
-		&m.monitor->profile[EIZO_PROFILE_KEY_USB_C_INPUT_PORTS];
 	for (size_t i = 0; ports[i]; i++) {
-		uint8_t usb_c = 0;
-		for (size_t u = 0; u < item->len / 2; u++)
-			if (ports[i] == peek_u16le(item->data + u * 2))
-				usb_c = u + 1;
-
-		NSString *title = nil;
-		if (!usb_c)
-			title = [NSString stringWithUTF8String:eizo_port_to_name(ports[i])];
-		else if (usb_c == 1)
-			title = [NSString stringWithUTF8String:g_port_names_usb_c[0]];
-		else
-			title = [NSString stringWithFormat:@"%s %u",
-				g_port_names_usb_c[0], usb_c];
+		NSString *title = [NSString stringWithUTF8String:
+			eizo_resolve_port_to_name(m.monitor, ports[i])];
 
 		NSMenuItem *inputPortItem = [[NSMenuItem alloc]
 			initWithTitle:title action:@selector(setInputPort:)
