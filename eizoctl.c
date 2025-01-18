@@ -18,6 +18,14 @@
  * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  */
+
+// On Windows, vswprintf() interprets %s in the width of the format string,
+// and %hs is not really compliant with any standard:
+// https://devblogs.microsoft.com/oldnewthing/20190830-00/?p=102823
+#ifdef _WIN32
+#define __USE_MINGW_ANSI_STDIO
+#endif
+
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -41,7 +49,9 @@
 #define hid_init hidapi_hid_init
 #endif
 
-#if defined __GNUC__
+#if defined __MINGW_GNU_PRINTF
+#define ATTRIBUTE_PRINTF(x, y) __MINGW_GNU_PRINTF((x), (y))
+#elif defined __GNUC__
 #define ATTRIBUTE_PRINTF(x, y) __attribute__((format(printf, x, y)))
 #else
 #define ATTRIBUTE_PRINTF(x, y)
@@ -1241,8 +1251,8 @@ message_output(const char *format, ...)
 	wchar_t *message = message_printf(format, ap);
 	va_end(ap);
 	if (message) {
-		MessageBox(
-			NULL, message, NULL, MB_ICONINFORMATION | MB_OK | MB_APPLMODAL);
+		MessageBox(NULL, message,
+			L"Message", MB_ICONINFORMATION | MB_OK | MB_APPLMODAL);
 		free(message);
 	}
 }
