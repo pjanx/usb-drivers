@@ -4,7 +4,7 @@
  * This program stays independent of the liberty library
  * in order to build on Windows.
  *
- * Copyright (c) 2024, Přemysl Eric Janouch <p@janouch.name>
+ * Copyright (c) 2025, Přemysl Eric Janouch <p@janouch.name>
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted.
