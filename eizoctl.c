@@ -817,7 +817,7 @@ eizo_port_to_name(uint16_t port)
 	else if (!number)
 		snprintf(buffer, sizeof buffer, "%s", stem);
 	else
-		snprintf(buffer, sizeof buffer, "%s %d", stem, number);
+		snprintf(buffer, sizeof buffer, "%s %d", stem, (number + 1));
 	return buffer;
 }
 
