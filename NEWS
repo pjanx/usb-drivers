@@ -1,3 +1,10 @@
+Unreleased
+
+ * eizoctl: added a --quiet option to suppress information and/or errors
+
+ * eizoctl: fixed input port reporting
+
+
 1.1.0 (2024-11-28)
 
  * Ported eizoctltray to macOS as well

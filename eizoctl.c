@@ -934,8 +934,40 @@ eizo_restart(struct eizo_monitor *m)
 
 // --- Main --------------------------------------------------------------------
 
+struct catbuf {
+	char buf[4096];
+	size_t len;
+};
+
+static const char *
+catf(struct catbuf *b, const char *format, ...) ATTRIBUTE_PRINTF(2, 3);
+
+static const char *
+catf(struct catbuf *b, const char *format, ...)
+{
+	va_list ap;
+	va_start(ap, format);
+	int result = vsnprintf(b->buf + b->len, sizeof b->buf - b->len, format, ap);
+	va_end(ap);
+	if (result >= 0) {
+		b->len += result;
+		if (b->len >= sizeof b->buf)
+			b->len = sizeof b->buf - 1;
+	}
+	return b->buf;
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+typedef void (*print_fn)(const char *format, ...) ATTRIBUTE_PRINTF(1, 2);
+
+static void print_dummy(const char *format, ...)
+{
+	(void) format;
+}
+
 static bool
-eizo_watch(struct eizo_monitor *m)
+eizo_watch(struct eizo_monitor *m, print_fn output, print_fn error)
 {
 	uint8_t buf[1024] = {};
 	int res = 0;
@@ -945,57 +977,72 @@ eizo_watch(struct eizo_monitor *m)
 
 		if (buf[0] != EIZO_REPORT_ID_GET &&
 			buf[0] != EIZO_REPORT_ID_GET_LONG) {
-			printf("Unknown report ID\n");
+			error("Unknown report ID: %02x\n", buf[0]);
 			continue;
 		}
 
+		struct catbuf message = {{0}, 0};
 		uint16_t page = peek_u16le(&buf[1]), id = peek_u16le(&buf[3]);
 		uint32_t usage = page << 16 | id;
-		printf("%08x", usage);
+		catf(&message, "%08x", usage);
 
 		const struct parser_report *r = eizo_monitor_subreport(m, usage);
 		if (!r) {
-			printf(" unknown usage\n");
+			output(catf(&message, " unknown usage\n"));
 			continue;
 		}
 		size_t rlen = r->report_size / 8 * r->report_count;
 		if ((size_t) res < 7 + rlen) {
-			printf(" received data too short\n");
+			output(catf(&message, " received data too short\n"));
 			continue;
 		}
 		if (r->report_size == 16)
 			for (size_t i = 0; i + 1 < rlen; i += 2)
-				printf(" %04x", peek_u16le(&buf[7 + i]));
+				catf(&message, " %04x", peek_u16le(&buf[7 + i]));
 		else
 			for (size_t i = 0; i < rlen; i++)
-				printf(" %02x", buf[7 + i]);
-		printf("\n");
+				catf(&message, " %02x", buf[7 + i]);
+		output(catf(&message, "\n"));
 	}
 }
 
-typedef void (*print_fn)(const char *format, ...) ATTRIBUTE_PRINTF(1, 2);
+static const char *usage = "Usage: %s OPTION...\n\n"
+	"  -b, --brightness [+-]BRIGHTNESS\n"
+	"   Change monitor brightness; values go from 0 to 1 and may be relative.\n"
+	"  -i, --input NAME\n"
+	"   Change monitor input ports; use '?' to retrieve current values.\n"
+	"  -r, --restart\n"
+	"   Reboot monitors.\n"
+	"  -e, --events\n"
+	"   Watch for events reported by monitors.\n"
+	"  -q, --quiet\n"
+	"   Use once to suppress informative messages, twice to suppress errors.\n"
+	"  -h, --help\n"
+	"   Display this help and exit.\n"
+	"  -V, --version\n"
+	"   Output version information and exit.\n";
 
 static int
-run(int argc, char *argv[], print_fn output, print_fn error, bool verbose)
+run(int argc, char *argv[], print_fn output, print_fn error)
 {
 	const char *name = argv[0];
-	const char *usage = "Usage: %s [--brightness [+-]BRIGHTNESS] [--input NAME]"
-		" [--restart] [--events]\n";
 	static struct option opts[] = {
-		{"input", required_argument, NULL, 'i'},
 		{"brightness", required_argument, NULL, 'b'},
+		{"input", required_argument, NULL, 'i'},
 		{"restart", no_argument, NULL, 'r'},
 		{"events", no_argument, NULL, 'e'},
+		{"quiet", no_argument, NULL, 'q'},
 		{"help", no_argument, NULL, 'h'},
 		{"version", no_argument, NULL, 'V'},
 		{}
 	};
 
+	int quiet = 0;
 	double brightness = NAN;
 	bool relative = false, restart = false, events = false;
 	const char *port = NULL;
 	int c = 0;
-	while ((c = getopt_long(argc, argv, "b:i:h", opts, NULL)) != -1)
+	while ((c = getopt_long(argc, argv, "b:i:reqhV", opts, NULL)) != -1)
 		switch (c) {
 		case 'b':
 			relative = *optarg == '+' || *optarg == '-';
@@ -1012,6 +1059,9 @@ run(int argc, char *argv[], print_fn output, print_fn error, bool verbose)
 			break;
 		case 'e':
 			events = true;
+			break;
+		case 'q':
+			quiet++;
 			break;
 		case 'h':
 			output(usage, name);
@@ -1038,6 +1088,10 @@ run(int argc, char *argv[], print_fn output, print_fn error, bool verbose)
 		error("%ls\n", hid_error(NULL));
 		return 1;
 	}
+	if (quiet > 0)
+		output = print_dummy;
+	if (quiet > 1)
+		error = print_dummy;
 
 	// It should be possible to choose a particular monitor,
 	// but it is generally more useful to operate on all of them.
@@ -1057,7 +1111,7 @@ run(int argc, char *argv[], print_fn output, print_fn error, bool verbose)
 				double next = relative ? brightness + prev : brightness;
 				if (!eizo_set_brightness(&m, next))
 					error("Failed to set brightness: %s\n", m.error);
-				else if (verbose)
+				else
 					output("%s %s: brightness: %.2f -> %.2f\n",
 						m.product, m.serial, prev, next);
 			}
@@ -1068,6 +1122,7 @@ run(int argc, char *argv[], print_fn output, print_fn error, bool verbose)
 			if (!eizo_get_input_port(&m, &prev)) {
 				error("Failed to get input port: %s\n", m.error);
 			} else if (!strcmp(port, "?")) {
+				// XXX: This does not report USB-C.
 				output("%s %s: input: %s\n",
 					m.product, m.serial, eizo_port_to_name(prev));
 			} else if (!next) {
@@ -1075,7 +1130,7 @@ run(int argc, char *argv[], print_fn output, print_fn error, bool verbose)
 			} else {
 				if (!eizo_set_input_port(&m, next))
 					error("Failed to set input port: %s\n", m.error);
-				else if (verbose)
+				else
 					output("%s %s: input: %s -> %s\n",
 						m.product, m.serial, eizo_port_to_name(prev), port);
 			}
@@ -1083,13 +1138,13 @@ run(int argc, char *argv[], print_fn output, print_fn error, bool verbose)
 		if (restart) {
 			if (!eizo_restart(&m))
 				error("Failed to restart: %s\n", m.error);
-			else if (verbose)
+			else
 				output("%s %s: restart\n", m.product, m.serial);
 		}
 		if (events) {
-			if (!verbose)
+			if (quiet)
 				error("Watching events is not possible in this mode\n");
-			else if (!eizo_watch(&m))
+			else if (!eizo_watch(&m, output, error))
 				error("%s\n", m.error);
 		}
 
@@ -1124,7 +1179,7 @@ stdio_error(const char *format, ...)
 int
 main(int argc, char *argv[])
 {
-	return run(argc, argv, stdio_output, stdio_error, true);
+	return run(argc, argv, stdio_output, stdio_error);
 }
 
 // --- Windows -----------------------------------------------------------------
@@ -1395,7 +1450,7 @@ wWinMain(
 			char *mb = mbargv[i + 1] = calloc(len, sizeof *mb);
 			wcstombs(mb, argv[i], len);
 		}
-		return run(argc + 1, mbargv, message_output, message_error, false);
+		return run(argc + 1, mbargv, message_output, message_error);
 	}
 	LocalFree(argv);
 
@@ -1708,7 +1763,7 @@ main(int argc, char *argv[])
 {
 	@autoreleasepool {
 		if (argc > 1)
-			return run(argc, argv, message_output, message_error, true);
+			return run(argc, argv, message_output, message_error);
 
 		NSApplication *app = [NSApplication sharedApplication];
 		ApplicationDelegate *delegate = [ApplicationDelegate new];
