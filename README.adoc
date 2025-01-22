@@ -1,6 +1,7 @@
 USB drivers
 ===========
 :compact-option:
+:source-highlighter: chroma
 
 _usb-drivers_ is a collection of utilities to control various hardware over USB.
 
@@ -25,6 +26,49 @@ it will also suspend or power off the system, respectively.
 
 image:eizoctltray-win.png["eizoctltray on Windows with expanded menu", 343, 278]
 image:eizoctltray-mac.png["eizoctltray on macOS with expanded menu", 343, 278]
+
+Installation
+^^^^^^^^^^^^
+On Windows, copy it to
+__Users\*\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup__.
+
+On macOS, copy it to the _Applications_ folder,
+then add it in _System Settings → General → Login Items → Open at Login_.
+
+Automation
+^^^^^^^^^^
+_eizoctltray_ can also be used the same way as _eizoctl_, just with any output
+redirected to message windows, rather than a console window or a terminal.
+This is useful for automation, such as with AutoHotkey.
+
+Beware that Windows is not a fan of how rapidly EIZO monitors switch upstream
+USB ports.  Thus, if you invoke port switching with keyboard shortcuts,
+remember to add a small delay, so that pressed modifier keys are not remembered.
+You will also want to silence any error messages.
+
+.AutoHotkey example
+```autohotkey
+#Requires AutoHotkey v2.0
+exe := A_Startup . "\eizoctltray.exe"
+^#F1::  { ; Windows + Control + F1
+	Sleep 500
+	Run exe " -qq --input HDMI"
+}
+^#F2::  { ; Windows + Control + F2
+	Sleep 500
+	Run exe " -qq --input DP"
+}
+^#F3::  { ; Windows + Control + F3
+	Sleep 500
+	Run exe " -qq --input USB-C"
+}
+#Home:: { ; Windows + Home
+	Run exe " -q --brightness +0.1"
+}
+#End::  { ; Windows + End
+	Run exe " -q --brightness -0.1"
+}
+```
 
 elksmart-comm
 ~~~~~~~~~~~~~
