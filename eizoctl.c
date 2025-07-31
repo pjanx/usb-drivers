@@ -1037,6 +1037,8 @@ eizo_watch(struct eizo_monitor *m, print_fn output, print_fn error)
 }
 
 static const char *usage = "Usage: %s OPTION...\n\n"
+	"  -l, --list\n"
+	"   List all connected EIZO monitors, with their serial number.\n"
 	"  -b, --brightness [+-]BRIGHTNESS\n"
 	"   Change monitor brightness; values go from 0 to 1 and may be relative.\n"
 	"  -i, --input NAME\n"
@@ -1057,6 +1059,7 @@ run(int argc, char *argv[], print_fn output, print_fn error)
 {
 	const char *name = argv[0];
 	static struct option opts[] = {
+		{"list", no_argument, NULL, 'l'},
 		{"brightness", required_argument, NULL, 'b'},
 		{"input", required_argument, NULL, 'i'},
 		{"restart", no_argument, NULL, 'r'},
@@ -1069,11 +1072,14 @@ run(int argc, char *argv[], print_fn output, print_fn error)
 
 	int quiet = 0;
 	double brightness = NAN;
-	bool relative = false, restart = false, events = false;
+	bool list = false, relative = false, restart = false, events = false;
 	const char *port = NULL;
 	int c = 0;
-	while ((c = getopt_long(argc, argv, "b:i:reqhV", opts, NULL)) != -1)
+	while ((c = getopt_long(argc, argv, "lb:i:reqhV", opts, NULL)) != -1)
 		switch (c) {
+		case 'l':
+			list = true;
+			break;
 		case 'b':
 			relative = *optarg == '+' || *optarg == '-';
 			if (sscanf(optarg, "%lf", &brightness) && isfinite(brightness))
@@ -1132,6 +1138,9 @@ run(int argc, char *argv[], print_fn output, print_fn error)
 			error("%s\n", m.error);
 			continue;
 		}
+
+		if (list)
+			output("%s %s\n", m.product, m.serial);
 
 		if (isfinite(brightness)) {
 			double prev = 0.;

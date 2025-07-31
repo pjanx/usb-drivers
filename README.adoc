@@ -70,6 +70,17 @@ exe := A_Startup . "\eizoctltray.exe"
 }
 ```
 
+On macOS, the simplest way to bind keyboard shortcuts is the Shortcuts app,
+with _Run Shell Scripts_ actions:
+
+```
+/Applications/eizoctltray.app/Contents/MacOS/eizoctltray -q --input HDMI
+```
+
+If you have issues with entering a specific key combination, like I did
+with ^⌘F1 etc., try changing it later within _System Settings_ → _Keyboard_ →
+_Keyboard Shortcuts..._ → _Services_ → _Shortcuts_.
+
 elksmart-comm
 ~~~~~~~~~~~~~
 _elksmart-comm_ interfaces with ELK Smart infrared dongles EKX4S and EKX5S-T,
