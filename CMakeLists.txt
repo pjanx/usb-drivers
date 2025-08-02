@@ -41,13 +41,16 @@ pkg_check_modules (libusb libusb-1.0)
 
 # On MSYS2, the CMake package cannot link statically, but pkg-config can.
 # On macOS, we explicitly want to use the CMake package.
-if (WIN32)
+if (NOT WIN32)
+	find_package (hidapi QUIET)
+	if (hidapi_FOUND)
+		set (hidapi_INCLUDE_DIRS)
+		set (hidapi_LIBRARY_DIRS)
+		set (hidapi_LIBRARIES hidapi::hidapi)
+	endif ()
+endif ()
+if (NOT hidapi_FOUND)
 	pkg_search_module (hidapi hidapi hidapi-hidraw hidapi-libusb)
-else ()
-	find_package (hidapi)
-	set (hidapi_INCLUDE_DIRS)
-	set (hidapi_LIBRARY_DIRS)
-	set (hidapi_LIBRARIES hidapi::hidapi)
 endif ()
 
 option (WITH_LIBUSB "Compile with libusb-based utilities" ${libusb_FOUND})
