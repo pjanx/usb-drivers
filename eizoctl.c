@@ -1251,10 +1251,13 @@ message_printf(const char *format, va_list ap)
 		return NULL;
 	mbstowcs(format_wide, format, format_wide_len);
 
-	int message_len = vswprintf(NULL, 0, format_wide, ap) + 1;
+	// Note that just vswprintf() cannot be used like this
+	// (at least since mingw-w64 commit c85d64),
+	// and vsnwprintf() is a MinGW extension, acting like C11 vsnwprintf_s.
+	int message_len = vsnwprintf(NULL, 0, format_wide, ap) + 1;
 	wchar_t *message = calloc(message_len, sizeof *message);
 	if (message_len > 0 && message)
-		vswprintf(message, message_len, format_wide, ap);
+		vsnwprintf(message, message_len, format_wide, ap);
 
 	free(format_wide);
 	return message;
