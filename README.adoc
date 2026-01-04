@@ -113,7 +113,7 @@ https://git.janouch.name/p/usb-drivers/releases[the Releases page on Gitea].
 
 Building
 --------
-Build dependencies:
+Build-only dependencies:
  CMake, pkg-config, liberty (included) +
 Runtime dependencies:
  libusb-1.0 (elksmart-comm, razer-bw-te-ctl), hidapi >= 0.14 (eizoctl)

@@ -1,6 +1,10 @@
-Unreleased
+1.2.0 (2026-01-04)
 
  * eizoctl: added a --quiet option to suppress information and/or errors
+
+ * eizoctl: added a --list option to list connected monitors
+
+ * eizoctl: added a --serial option to only act on particular monitors
 
  * eizoctl: fixed input port reporting
 
