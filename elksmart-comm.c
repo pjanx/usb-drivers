@@ -306,20 +306,25 @@ init_device_from_desc(struct libusb_config_descriptor *desc, struct error **e)
 static bool
 init_device(libusb_device_handle *device, struct error **e)
 {
+	int result = libusb_kernel_driver_active(device, USB_INTERFACE);
+	if (result == 1) {
+		// macOS for some reason claims the interface and we need to detach it
+		// before the following call to libusb_get_active_config_descriptor().
+		if ((result = libusb_detach_kernel_driver(device, USB_INTERFACE)))
+			return error_set(e, "cannot detach kernel driver: %s",
+				libusb_strerror(result));
+
+		print_debug("detached the kernel driver");
+	} else if (result) {
+		return error_set(e, "%s", libusb_strerror(result));
+	}
+
 	struct libusb_config_descriptor *desc = NULL;
-	int result =
-		libusb_get_active_config_descriptor(libusb_get_device(device), &desc);
-	if (result)
+	if ((result = libusb_get_active_config_descriptor(
+			libusb_get_device(device), &desc)))
 		return error_set(e, "%s", libusb_strerror(result));
 
-	bool ok = true;
-	if ((result = libusb_kernel_driver_active(device, USB_INTERFACE)) == 1)
-		ok = error_set(e, "device is claimed by a kernel driver");
-	else if (result)
-		ok = error_set(e, "%s", libusb_strerror(result));
-	else
-		ok = init_device_from_desc(desc, e);
-
+	bool ok = init_device_from_desc(desc, e);
 	libusb_free_config_descriptor(desc);
 	return ok;
 }
