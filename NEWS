@@ -1,3 +1,8 @@
+Unreleased
+
+ * Added upscat for streaming status from UPS devices
+
+
 1.2.0 (2026-01-04)
 
  * eizoctl: added a --quiet option to suppress information and/or errors

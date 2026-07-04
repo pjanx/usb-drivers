@@ -102,6 +102,28 @@ Make sure to let the Windows Razer Synapse tool upgrade the firmware to the
 newest version before running the program.  There might be some issues otherwise
 due to protocol changes, although I don't really deem it very probable.
 
+upscat
+~~~~~~
+_upscat_ streams the basic status of UPS devices using the USB HID protocol,
+in CSV format.  You'll get the power status, remaining capacity, run time,
+and load percentage.  It's been verified with Eaton 3S/3P series and CyberPower
+BR1200ELCD, both working quite differently.
+
+This program is meant to be a simple replacement for NUT:
+
+```sh
+upscat | awk -F, '
+	BEGIN {
+		getline
+		for (i = 1; i <= NF; i++) csv[$i] = i
+	}
+	!$csv["AC Present"] && $csv["Remaining Capacity"] < 50 {
+		print "On battery with " $csv["Remaining Capacity"] "% left, suspending"
+		system("systemctl suspend")
+		exit
+	}'
+```
+
 Packages
 --------
 Regular releases are sporadic.  git master should be stable enough.

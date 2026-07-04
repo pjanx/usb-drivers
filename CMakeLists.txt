@@ -35,6 +35,7 @@ endif ()
 # Dependencies
 set (CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/liberty/cmake)
 include (IconUtils)
+include (CTest)
 
 find_package (PkgConfig REQUIRED)
 pkg_check_modules (libusb libusb-1.0)
@@ -95,6 +96,20 @@ if (WITH_HIDAPI)
 	target_include_directories (eizoctl PUBLIC ${hidapi_INCLUDE_DIRS})
 	target_link_directories (eizoctl PUBLIC ${hidapi_LIBRARY_DIRS})
 	target_link_libraries (eizoctl ${hidapi_LIBRARIES})
+
+	list (APPEND targets upscat)
+	add_executable (upscat upscat.c)
+	target_include_directories (upscat PUBLIC ${hidapi_INCLUDE_DIRS})
+	target_link_directories (upscat PUBLIC ${hidapi_LIBRARY_DIRS})
+	target_link_libraries (upscat ${hidapi_LIBRARIES})
+endif ()
+if (WITH_HIDAPI AND BUILD_TESTING)
+	add_executable (test-upscat $<TARGET_PROPERTY:upscat,SOURCES>)
+	set_target_properties (test-upscat PROPERTIES COMPILE_DEFINITIONS TESTING)
+	target_link_libraries (test-upscat $<TARGET_PROPERTY:upscat,LINK_LIBRARIES>)
+	add_test (NAME test-upscat
+		COMMAND test-upscat upscat-eaton3p.bin upscat-cyberpower.bin
+		WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}")
 endif ()
 if (WITH_HIDAPI AND WIN32)
 	list (APPEND targets_gui eizoctltray)
