@@ -142,7 +142,6 @@ struct parser {
 	struct parser_state_local {
 		uint32_t usage;
 		uint32_t usage_minimum;
-		uint32_t usage_maximum;
 		uint32_t designator_index;
 		uint32_t designator_minimum;
 		uint32_t designator_maximum;
@@ -266,7 +265,8 @@ parse_item(
 		break; case PARSER_ITEM_TAG_LOCAL_USAGE_MINIMUM:
 			parser->local.usage_minimum = u;
 		break; case PARSER_ITEM_TAG_LOCAL_USAGE_MAXIMUM:
-			parser->local.usage_maximum = u;
+			// This adds to usages from parser->local.usage_minimum through u.
+			return "usage ranges are not supported";
 		break; case PARSER_ITEM_TAG_LOCAL_DESIGNATOR_INDEX:
 			parser->local.designator_index = u;
 		break; case PARSER_ITEM_TAG_LOCAL_DESIGNATOR_MINIMUM:
