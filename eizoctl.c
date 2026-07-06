@@ -1003,7 +1003,7 @@ eizo_watch(struct eizo_monitor *m, print_fn output, print_fn error)
 	int res = 0;
 	while (true) {
 		if ((res = hid_read(m->dev, buf, sizeof buf)) < 0)
-			return eizo_monitor_failf(m, "watch: %ls", hid_error(m->dev));
+			return eizo_monitor_failf(m, "watch: %ls", hid_read_error(m->dev));
 
 		if (buf[0] != EIZO_REPORT_ID_GET &&
 			buf[0] != EIZO_REPORT_ID_GET_LONG) {
