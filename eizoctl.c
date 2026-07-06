@@ -1018,12 +1018,12 @@ eizo_watch(struct eizo_monitor *m, print_fn output, print_fn error)
 
 		const struct parser_report *r = eizo_monitor_subreport(m, usage);
 		if (!r) {
-			output(catf(&message, " unknown usage\n"));
+			output("%s", catf(&message, " unknown usage\n"));
 			continue;
 		}
 		size_t rlen = r->report_size / 8 * r->report_count;
 		if ((size_t) res < 7 + rlen) {
-			output(catf(&message, " received data too short\n"));
+			output("%s", catf(&message, " received data too short\n"));
 			continue;
 		}
 		if (r->report_size == 16)
@@ -1032,7 +1032,7 @@ eizo_watch(struct eizo_monitor *m, print_fn output, print_fn error)
 		else
 			for (size_t i = 0; i < rlen; i++)
 				catf(&message, " %02x", buf[7 + i]);
-		output(catf(&message, "\n"));
+		output("%s", catf(&message, "\n"));
 	}
 }
 
