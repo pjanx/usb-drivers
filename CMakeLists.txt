@@ -108,6 +108,8 @@ if (WITH_HIDAPI AND BUILD_TESTING)
 	set_target_properties (test-upscat PROPERTIES COMPILE_DEFINITIONS TESTING)
 	target_include_directories (test-upscat
 		PUBLIC $<TARGET_PROPERTY:upscat,INCLUDE_DIRECTORIES>)
+	target_link_directories (test-upscat
+		PUBLIC $<TARGET_PROPERTY:upscat,LINK_DIRECTORIES>)
 	target_link_libraries (test-upscat
 		PUBLIC $<TARGET_PROPERTY:upscat,LINK_LIBRARIES>)
 	add_test (NAME test-upscat
