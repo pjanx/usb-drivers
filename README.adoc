@@ -104,7 +104,7 @@ due to protocol changes, although I don't really deem it very probable.
 
 upscat
 ~~~~~~
-_upscat_ streams the basic status of UPS devices using the USB HID protocol,
+_upscat_ streams the basic status of UPS devices that use the USB HID protocol,
 in CSV format.  You'll get the power status, remaining capacity, run time,
 and load percentage.  It's been verified with Eaton 3S/3P series and CyberPower
 BR1200ELCD, both working quite differently.
