@@ -111,7 +111,7 @@ usb_hid_usage_page_to_string(uint16_t usage_page)
 	if (entry)
 		return entry->name;
 
-	static char buffer[128];
+	static char buffer[32];
 	snprintf(buffer, sizeof buffer, "%04x", usage_page);
 	return buffer;
 }
@@ -119,8 +119,6 @@ usb_hid_usage_page_to_string(uint16_t usage_page)
 static const char *
 usb_hid_usage_to_string(uint32_t usage)
 {
-	static char buffer[128];
-
 	const struct usb_hid_usage_info *info = bsearch(
 		&usage, usb_hid_usages,
 		sizeof usb_hid_usages / sizeof usb_hid_usages[0],
@@ -128,6 +126,7 @@ usb_hid_usage_to_string(uint32_t usage)
 	if (info)
 		return info->name;
 
+	static char buffer[64];
 	const struct usb_hid_usage_range_info *range = bsearch(
 		&usage, usb_hid_usages_ranged,
 		sizeof usb_hid_usages_ranged / sizeof usb_hid_usages_ranged[0],

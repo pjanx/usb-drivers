@@ -132,6 +132,8 @@ as a https://git.janouch.name/p/nixexprs[Nix derivation].
 
 Windows/macOS binaries can be downloaded from
 https://git.janouch.name/p/usb-drivers/releases[the Releases page on Gitea].
+They aren't signed/trusted--feel free to either rebuild them yourself,
+or contact me about a donation to change that.
 
 Building
 --------

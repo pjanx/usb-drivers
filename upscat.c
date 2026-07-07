@@ -19,13 +19,6 @@
  *
  */
 
-// On Windows, vswprintf() interprets %s in the width of the format string,
-// and %hs is not really compliant with any standard:
-// https://devblogs.microsoft.com/oldnewthing/20190830-00/?p=102823
-#ifdef _WIN32
-#define __USE_MINGW_ANSI_STDIO
-#endif
-
 #ifndef _POSIX_C_SOURCE
 #define _POSIX_C_SOURCE 200112L
 #endif
@@ -45,8 +38,9 @@
 #include <getopt.h>
 #include <hidapi.h>
 
-#ifdef WIN32
+#ifdef _WIN32
 #include <sysinfoapi.h>  // GetTickCount
+#include <synchapi.h>  // Sleep
 #else
 #include <errno.h>
 #include <time.h>  // clock_gettime
@@ -75,7 +69,7 @@
 static int64_t
 get_timestamp_ms(void)
 {
-#ifdef WIN32
+#ifdef _WIN32
 	return GetTickCount64();
 #else
 	struct timespec tp;
@@ -613,6 +607,7 @@ ups_open(struct ups *u, const struct hid_device_info *info)
 		goto out2;
 	}
 
+	// XXX: On Windows, this is wildly reconstructed, and may not work.
 	uint8_t descriptor[HID_API_MAX_REPORT_DESCRIPTOR_SIZE] = {};
 	int len = hid_get_report_descriptor(dev, descriptor, sizeof descriptor);
 	if (len < 0) {
@@ -745,6 +740,11 @@ ups_watch(struct ups *u, int interval, int verbose)
 	uint8_t buf[1024] = {};
 	int res = 0;
 	while (true) {
+#ifdef _WIN32
+		// FIXME: Windows seems to fail reads with "Incorrect function".
+		// For now, at least try to make do with simple rescans.
+		Sleep(until_rescan);
+#else
 		int64_t stamp = get_timestamp_ms();
 		if ((res = hid_read_timeout(
 				u->dev, buf, sizeof buf, until_rescan)) < 0)
@@ -753,6 +753,7 @@ ups_watch(struct ups *u, int interval, int verbose)
 			if ((until_rescan -= get_timestamp_ms() - stamp) < 0)
 				until_rescan = 0;
 		}
+#endif
 
 		if (!res) {
 			// Non-negative intervals allow a timeout:
@@ -777,6 +778,12 @@ ups_watch(struct ups *u, int interval, int verbose)
 
 #ifdef TESTING
 
+static struct ups test_ups = {.info = &(const struct hid_device_info) {
+	.path = "",
+	.manufacturer_string = L"Test",
+	.product_string = L"Test",
+}};
+
 static bool
 test_parse_descriptor_file(const char *path)
 {
@@ -795,19 +802,16 @@ test_parse_descriptor_file(const char *path)
 	}
 	fclose(fp);
 
-	struct ups u = {.info = &(struct hid_device_info) {
-		.path = "",
-		.manufacturer_string = L"Test",
-		.product_string = L"Test",
-	}};
-	const char *err = parse_descriptor(&u.parser, data, len);
+	struct ups *u = &test_ups;
+	memset(&u->parser, 0, sizeof u->parser);
+	const char *err = parse_descriptor(&u->parser, data, len);
 	if (err) {
 		fprintf(stderr, "%s: failed to parse report descriptor: %s\n",
 			path, err);
 		return false;
 	}
-	if (!ups_is_compatible(&u)) {
-		fprintf(stderr, "%s: incompatible: %s\n", path, u.error);
+	if (!ups_is_compatible(u)) {
+		fprintf(stderr, "%s: incompatible: %s\n", path, u->error);
 		return false;
 	}
 	return true;
