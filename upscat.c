@@ -583,6 +583,8 @@ ups_is_compatible(struct ups *u)
 static bool
 ups_open(struct ups *u, const struct hid_device_info *info)
 {
+	memset(u, 0, sizeof *u);
+
 #if 0
 	// On some systems, we get one Application collection per logical device.
 	// However, on systems where this is not the case, if there are
@@ -607,13 +609,18 @@ ups_open(struct ups *u, const struct hid_device_info *info)
 		goto out2;
 	}
 
-	// XXX: On Windows, this is wildly reconstructed, and may not work.
 	uint8_t descriptor[HID_API_MAX_REPORT_DESCRIPTOR_SIZE] = {};
 	int len = hid_get_report_descriptor(dev, descriptor, sizeof descriptor);
 	if (len < 0) {
 		ups_failf(u, "failed to read report descriptor");
 		goto out2;
 	}
+
+#if DUMP_DESCRIPTORS
+	for (size_t i = 0; i < (size_t) len; i++)
+		printf("%02x ", descriptor[i]);
+	printf("\n");
+#endif
 
 	const char *err = parse_descriptor(&u->parser, descriptor, len);
 	if (err) {
