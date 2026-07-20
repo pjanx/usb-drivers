@@ -118,11 +118,14 @@ upscat | awk -F, '
 		for (i = 1; i <= NF; i++) csv[$i] = i
 	}
 	!$csv["AC Present"] && $csv["Remaining Capacity"] < 50 {
-		print "On battery with " $csv["Remaining Capacity"] "% left, suspending"
-		system("systemctl suspend")
+		print "On battery with " $csv["Remaining Capacity"] "% left, shutting down"
+		system("systemctl poweroff")
 		exit
 	}'
 ```
+
+Beware that in my experience, merely having Eatons connected over USB can
+mess with your system's ability to suspend.
 
 Packages
 --------
