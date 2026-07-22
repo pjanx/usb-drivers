@@ -205,17 +205,18 @@ compress_pulses(const struct pulse *pulses, size_t len, struct str *encoded)
 			if (pulse_equal(pulses[i], pulses[k]))
 				counts[i]++;
 
-	struct pulse p1 = {}, p2 = {};
-	size_t top1 = 0, top2 = 0;
+	size_t top1 = 0;
 	for (size_t i = 0; i < len; i++)
 		if (counts[i] > counts[top1])
-			p1 = pulses[top1 = i];
+			top1 = i;
+
+	size_t top2 = top1;
 	for (size_t i = 0; i < len; i++)
-		if (counts[i] < counts[top1] &&
-			counts[i] > counts[top2])
-			p2 = pulses[top2 = i];
-		else if (counts[top2] == counts[top1])
-			p2 = pulses[top2 = i];
+		if (!pulse_equal(pulses[i], pulses[top1]) &&
+			(top2 == top1 || counts[i] > counts[top2]))
+			top2 = i;
+
+	struct pulse p1 = pulses[top1], p2 = pulses[top2];
 
 	// Although I haven't really tried it, something tells me that
 	// this will work even in the degenerated case of len <= 2.
