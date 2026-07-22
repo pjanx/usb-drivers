@@ -241,6 +241,116 @@ compress_pulses(const struct pulse *pulses, size_t len, struct str *encoded)
 	}
 }
 
+// --- Huffman -----------------------------------------------------------------
+// LLM-reconstructed from the Ocrustar application, untested.
+
+struct huffman_node {
+	struct huffman_node *parent;
+	unsigned frequency;
+	bool bit;
+};
+
+static void
+huffman_push(struct huffman_node **heap, size_t *len, struct huffman_node *node)
+{
+	// Equal frequencies must behave like Java's PriorityQueue.
+	size_t child = (*len)++;
+	while (child) {
+		size_t parent = (child - 1) / 2;
+		if (node->frequency >= heap[parent]->frequency)
+			break;
+		heap[child] = heap[parent];
+		child = parent;
+	}
+	heap[child] = node;
+}
+
+static struct huffman_node *
+huffman_pop(struct huffman_node **heap, size_t *len)
+{
+	struct huffman_node *result = heap[0], *node = heap[--*len];
+	if (!*len)
+		return result;
+
+	size_t parent = 0;
+	while (parent < *len / 2) {
+		size_t child = parent * 2 + 1;
+		if (child + 1 < *len &&
+			heap[child + 1]->frequency < heap[child]->frequency)
+			child++;
+		if (heap[child]->frequency >= node->frequency)
+			break;
+		heap[parent] = heap[child];
+		parent = child;
+	}
+	heap[parent] = node;
+	return result;
+}
+
+static void
+huffman_encode(const struct str *input, struct str *encoded)
+{
+	unsigned frequencies[256] = {};
+	for (size_t i = 0; i < input->len; i++)
+		frequencies[(uint8_t) input->str[i]]++;
+
+	struct huffman_node nodes[511] = {};
+	struct huffman_node *heap[256];
+	struct huffman_node *leaves[256] = {};
+	size_t nodes_len = 0, heap_len = 0;
+	for (size_t i = 0; i < N_ELEMENTS(frequencies); i++) {
+		if (!frequencies[i])
+			continue;
+		struct huffman_node *node = leaves[i] = &nodes[nodes_len++];
+		node->frequency = frequencies[i];
+		huffman_push(heap, &heap_len, node);
+	}
+
+	str_pack_u16(encoded, heap_len);
+	for (size_t i = 0; i < N_ELEMENTS(frequencies); i++) {
+		if (!frequencies[i])
+			continue;
+		str_pack_u8(encoded, i);
+		str_pack_u16(encoded, frequencies[i]);
+	}
+
+	while (heap_len > 1) {
+		struct huffman_node *left = huffman_pop(heap, &heap_len);
+		struct huffman_node *right = huffman_pop(heap, &heap_len);
+		struct huffman_node *node = &nodes[nodes_len++];
+		node->frequency = left->frequency + right->frequency;
+		left->parent = right->parent = node;
+		left->bit = false;
+		right->bit = true;
+		huffman_push(heap, &heap_len, node);
+	}
+
+	// The padding count precedes the data, so reserve it for now.
+	size_t padding = encoded->len;
+	str_pack_u8(encoded, 0);
+
+	uint8_t bits[256];
+	uint8_t byte = 0;
+	size_t bit = 0;
+	for (size_t i = 0; i < input->len; i++) {
+		size_t len = 0;
+		for (struct huffman_node *node = leaves[(uint8_t) input->str[i]];
+			node->parent; node = node->parent)
+			bits[len++] = node->bit;
+		while (len) {
+			byte = byte << 1 | bits[--len];
+			if (++bit == 8) {
+				str_pack_u8(encoded, byte);
+				byte = bit = 0;
+			}
+		}
+	}
+	if (bit) {
+		encoded->str[padding] = 8 - bit;
+		str_pack_u8(encoded, byte << (8 - bit));
+	}
+}
+
 // --- Device interaction ------------------------------------------------------
 
 enum {
@@ -251,9 +361,16 @@ enum {
 	// 0x184 (EKX5S-T, international edition)
 	USB_PRODUCT_SMTCTL_SMART_EKX4S = 0x0195,
 	USB_PRODUCT_SMTCTL_SMART_EKX5S_T = 0x0184,
+	USB_PRODUCT_SMTCTL_SMART_0132 = 0x0132,
 
 	// There should only ever be one interface.
 	USB_INTERFACE = 0,
+};
+
+enum device_protocol {
+	DEVICE_PROTOCOL_UNKNOWN,
+	DEVICE_PROTOCOL_PLAIN,
+	DEVICE_PROTOCOL_HUFFMAN,
 };
 
 static uint8_t
@@ -277,7 +394,8 @@ init_device_from_desc(struct libusb_config_descriptor *desc, struct error **e)
 		return error_set(e, "unexpected alternate setting count");
 
 	const struct libusb_interface_descriptor *asd = desc->interface->altsetting;
-	if (asd->bInterfaceClass != LIBUSB_CLASS_COMM)
+	if (asd->bInterfaceClass != LIBUSB_CLASS_COMM &&
+		asd->bInterfaceClass != LIBUSB_CLASS_VENDOR_SPEC)
 		return error_set(e, "unexpected USB interface class");
 	if (asd->bNumEndpoints != 2)
 		return error_set(e, "unexpected endpoint count");
@@ -353,7 +471,8 @@ checksum(const uint8_t *b, size_t len)
 
 static bool
 send_transmit(libusb_device_handle *device, unsigned long frequency,
-	const struct pulse *pulses, size_t pulses_len, struct error **e)
+	const struct pulse *pulses, size_t pulses_len,
+	enum device_protocol protocol, struct error **e)
 {
 	if (g_debug_mode)
 		for (size_t i = 0; i < pulses_len;) {
@@ -363,6 +482,12 @@ send_transmit(libusb_device_handle *device, unsigned long frequency,
 
 	struct str compressed = str_make();
 	compress_pulses(pulses, pulses_len, &compressed);
+	if (protocol == DEVICE_PROTOCOL_HUFFMAN) {
+		struct str huffman = str_make();
+		huffman_encode(&compressed, &huffman);
+		str_free(&compressed);
+		compressed = huffman;
+	}
 
 	struct str message = str_make();
 	str_append_data(&message, c_transmit, sizeof c_transmit);
@@ -508,8 +633,23 @@ send_learn(libusb_device_handle *device, struct error **e)
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
+static enum device_protocol
+classify_device(const uint8_t *b, size_t len)
+{
+	if (len == 6 && !memcmp(b, c_identify, sizeof c_identify) &&
+		b[4] == 0x02 && b[5] == 0xaa)
+		return DEVICE_PROTOCOL_HUFFMAN;
+	if (len == 6 && !memcmp(b, c_identify, sizeof c_identify) &&
+		b[4] == 0x70 && b[5] == 0x01)
+		return DEVICE_PROTOCOL_PLAIN;
+	if (len == 6 && !memcmp(b, "\xfa\xfa\xfa\xfa", 4))
+		return DEVICE_PROTOCOL_PLAIN;
+	return DEVICE_PROTOCOL_UNKNOWN;
+}
+
 static bool
-send_identify(libusb_device_handle *device, struct error **e)
+send_identify(libusb_device_handle *device, enum device_protocol *protocol,
+	struct error **e)
 {
 	uint8_t buffer[64] = {};
 	int result = 0, len = 0;
@@ -517,17 +657,23 @@ send_identify(libusb_device_handle *device, struct error **e)
 			device, g.endpoint_in, buffer, sizeof buffer, &len, 10)))
 		/* Flush buffers. */;
 
-	if ((result = libusb_bulk_transfer(
-			device, g.endpoint_out, c_identify, sizeof c_identify, &len, 100)))
-		return error_set(e, "identify/send: %s", libusb_strerror(result));
-	if ((result = libusb_bulk_transfer(
-			device, g.endpoint_in, buffer, sizeof buffer, &len, 100)))
-		return error_set(e, "identify/recv: %s", libusb_strerror(result));
+	int attempt = 0;
+	while (true) {
+		if ((result = libusb_bulk_transfer(device, g.endpoint_out,
+				c_identify, sizeof c_identify, &len, 100)))
+			return error_set(e, "identify/send: %s", libusb_strerror(result));
+		if (!(result = libusb_bulk_transfer(device, g.endpoint_in,
+				buffer, sizeof buffer, &len, 500)))
+			break;
+		if (result != LIBUSB_ERROR_TIMEOUT || ++attempt == 4)
+			return error_set(e, "identify/recv: %s", libusb_strerror(result));
+	}
 
 	// XXX: Sometimes, the device doesn't send any identification values.
-	if (len != 6 || memcmp(buffer, c_identify, sizeof c_identify) ||
-		buffer[4] != 0x70 || buffer[5] != 0x01)
+	if ((*protocol = classify_device(buffer, len)) == DEVICE_PROTOCOL_UNKNOWN)
 		return error_set(e, "device busy or not supported");
+	print_debug("device protocol: %s",
+		*protocol == DEVICE_PROTOCOL_HUFFMAN ? "Huffman" : "plain");
 
 #if 0
 	// The EKX4S does not respond to this request.
@@ -549,7 +695,8 @@ static bool
 run(libusb_device_handle *device, unsigned long frequency, bool nec,
 	char **codes, size_t codes_len, struct error **e)
 {
-	if (!send_identify(device, e))
+	enum device_protocol protocol = DEVICE_PROTOCOL_UNKNOWN;
+	if (!send_identify(device, &protocol, e))
 		return false;
 	if (!codes_len)
 		return send_learn(device, e);
@@ -567,7 +714,8 @@ run(libusb_device_handle *device, unsigned long frequency, bool nec,
 			? encode_nec(&code, &pulses_len, e)
 			: decode_learned(&code, &pulses_len, e);
 
-		ok = pulses && send_transmit(device, frequency, pulses, pulses_len, e);
+		ok = pulses && send_transmit(
+			device, frequency, pulses, pulses_len, protocol, e);
 		free(pulses);
 		if (!ok)
 			break;
@@ -577,6 +725,47 @@ run(libusb_device_handle *device, unsigned long frequency, bool nec,
 	str_free(&code);
 	return ok;
 }
+
+// --- Tests -------------------------------------------------------------------
+
+#ifdef TESTING
+
+static bool
+test_huffman(const void *data, size_t len, const char *expected_hex)
+{
+	const struct str input = {.str = (char *) data, .len = len};
+	struct str expected = str_make(), encoded = str_make();
+	huffman_encode(&input, &encoded);
+	bool ok = read_hex(expected_hex, &expected) &&
+		encoded.len == expected.len &&
+		!memcmp(encoded.str, expected.str, expected.len);
+	if (!ok) {
+		fprintf(stderr, "Huffman mismatch\nexpected: %s\nactual:   ",
+			expected_hex);
+		for (size_t i = 0; i < encoded.len; i++)
+			fprintf(stderr, "%02x", (uint8_t) encoded.str[i]);
+		fputc('\n', stderr);
+	}
+	str_free(&expected);
+	str_free(&encoded);
+	return ok;
+}
+
+int
+main(void)
+{
+	bool ok = true;
+	ok &= test_huffman("", 0, "000000");
+	ok &= test_huffman("\0", 1, "000100000100");
+	ok &= test_huffman("\0\1\2\3", 4,
+		"00040000010100010200010300010039");
+	ok &= test_huffman("ABRACADABRA", 11,
+		"00054100054200024300014400015200020159cf58");
+	return !ok;
+}
+
+#define main main_shadowed
+#endif // TESTING
 
 // --- Main --------------------------------------------------------------------
 
@@ -647,6 +836,9 @@ main(int argc, char *argv[])
 	if (!device && !result)
 		device = find_device(
 			USB_VENDOR_SMTCTL, USB_PRODUCT_SMTCTL_SMART_EKX5S_T, &result);
+	if (!device && !result)
+		device = find_device(
+			USB_VENDOR_SMTCTL, USB_PRODUCT_SMTCTL_SMART_0132, &result);
 
 	if (result)
 		exit_fatal("couldn't open device: %s", libusb_strerror(result));

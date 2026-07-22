@@ -82,6 +82,18 @@ if (WITH_LIBUSB AND NOT WIN32)
 	target_link_directories (elksmart-comm PUBLIC ${libusb_LIBRARY_DIRS})
 	target_link_libraries (elksmart-comm ${libusb_LIBRARIES})
 endif ()
+if (WITH_LIBUSB AND NOT WIN32 AND BUILD_TESTING)
+	add_executable (test-elksmart-comm $<TARGET_PROPERTY:elksmart-comm,SOURCES>)
+	set_target_properties (test-elksmart-comm
+		PROPERTIES COMPILE_DEFINITIONS TESTING)
+	target_include_directories (test-elksmart-comm
+		PUBLIC $<TARGET_PROPERTY:elksmart-comm,INCLUDE_DIRECTORIES>)
+	target_link_directories (test-elksmart-comm
+		PUBLIC $<TARGET_PROPERTY:elksmart-comm,LINK_DIRECTORIES>)
+	target_link_libraries (test-elksmart-comm
+		PUBLIC $<TARGET_PROPERTY:elksmart-comm,LINK_LIBRARIES>)
+	add_test (NAME test-elksmart-comm COMMAND test-elksmart-comm)
+endif ()
 if (WITH_LIBUSB)
 	list (APPEND targets razer-bw-te-ctl)
 	add_executable (razer-bw-te-ctl razer-bw-te-ctl.c)
