@@ -656,7 +656,7 @@ main(int argc, char *argv[])
 	struct error *e = NULL;
 	if (!init_device(device, &e))
 		exit_fatal("%s", e->message);
-	if ((result = libusb_claim_interface(device, USB_INTERFACE)) == 1)
+	if ((result = libusb_claim_interface(device, USB_INTERFACE)))
 		exit_fatal("couldn't claim interface: %s", libusb_strerror(result));
 
 	if (!run(device, frequency, nec, argv, argc, &e)) {
@@ -664,7 +664,7 @@ main(int argc, char *argv[])
 		error_free(e);
 	}
 
-	if ((result = libusb_release_interface(device, USB_INTERFACE)) == 1)
+	if ((result = libusb_release_interface(device, USB_INTERFACE)))
 		exit_fatal("couldn't release interface: %s", libusb_strerror(result));
 
 	libusb_close(device);
