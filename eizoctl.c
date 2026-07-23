@@ -1171,16 +1171,16 @@ run(int argc, char *argv[], print_fn output, print_fn error)
 			if (!eizo_get_input_port(&m, &prev)) {
 				error("Failed to get input port: %s\n", m.error);
 			} else if (!strcmp(port, "?")) {
-				output("%s %s: input: %s\n",
-					m.product, m.serial, eizo_resolve_port_to_name(&m, prev));
+				output("%s %s: input: %s\n", m.product, m.serial,
+					eizo_resolve_port_to_name(&m, prev));
 			} else if (!next) {
 				error("Failed to resolve port name: %s\n", port);
 			} else {
 				if (!eizo_set_input_port(&m, next))
 					error("Failed to set input port: %s\n", m.error);
 				else
-					output("%s %s: input: %s -> %s\n",
-						m.product, m.serial, eizo_port_to_name(prev), port);
+					output("%s %s: input: %s -> %s\n", m.product, m.serial,
+						eizo_resolve_port_to_name(&m, prev), port);
 			}
 		}
 		if (restart) {
