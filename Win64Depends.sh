@@ -1,7 +1,8 @@
 #!/bin/sh -e
 # Win64Depends.sh: download dependencies from MSYS2 for cross-compilation.
 # Dependencies: AWK, sed, sha256sum, cURL, bsdtar
-repository=https://repo.msys2.org/mingw/mingw64/
+repository=https://repo.msys2.org/mingw/ucrt64/
+pkg=mingw-w64-ucrt-x86_64
 
 status() {
 	echo "$(tput bold)-- $*$(tput sgr0)"
@@ -9,7 +10,7 @@ status() {
 
 dbsync() {
 	status Fetching repository DB
-	[ -f db.tsv ] || curl -# "$repository/mingw64.db" | bsdtar -xOf- | awk '
+	[ -f db.tsv ] || curl -# "$repository/ucrt64.db" | bsdtar -xOf- | awk '
 		function flush() { print f["%NAME%"] f["%FILENAME%"] f["%DEPENDS%"] }
 		NR > 1 && $0 == "%FILENAME%" { flush(); for (i in f) delete f[i] }
 		!/^[^%]/ { field = $0; next } { f[field] = f[field] $0 "\t" }
@@ -52,10 +53,10 @@ extract() {
 
 # This directory name matches the prefix in .pc files, so we don't need to
 # modify them (pkgconf has --prefix-variable, but CMake can't pass that option).
-mkdir -p mingw64
-cd mingw64
+mkdir -p ucrt64
+cd ucrt64
 dbsync
-fetch mingw-w64-x86_64-hidapi mingw-w64-x86_64-libusb
+fetch $pkg-hidapi $pkg-libusb
 verify
 extract
 
