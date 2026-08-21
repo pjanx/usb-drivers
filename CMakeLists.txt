@@ -14,10 +14,9 @@ endif ()
 
 if (WIN32 AND CMAKE_CROSSCOMPILING)
 	set (win32_deps_root "${PROJECT_SOURCE_DIR}")
-	set (win32_deps_prefix "${win32_deps_root}/mingw64")
+	set (win32_deps_prefix "${win32_deps_root}/ucrt64")
 	list (APPEND CMAKE_PREFIX_PATH "${win32_deps_prefix}")
 	list (APPEND CMAKE_INCLUDE_PATH "${win32_deps_prefix}/lib")
-	set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mms-bitfields")
 
 	list (APPEND CMAKE_FIND_ROOT_PATH ${win32_deps_prefix})
 
